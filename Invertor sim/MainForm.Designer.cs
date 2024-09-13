@@ -1,4 +1,6 @@
-﻿using System.Windows.Forms.DataVisualization.Charting;
+﻿using System.Collections.Generic;
+using System.Windows.Forms;
+using System.Windows.Forms.DataVisualization.Charting;
 
 namespace Invertor_sim
 {
@@ -50,6 +52,9 @@ namespace Invertor_sim
             this.dateTimePicker.Name = "dateTimePicker";
             this.dateTimePicker.Size = new System.Drawing.Size(224, 26);
             this.dateTimePicker.TabIndex = 0;
+            // Set the Format type and the CustomFormat string.
+            this.dateTimePicker.Format = DateTimePickerFormat.Custom;
+            dateTimePicker.CustomFormat = "MM-dd-yyyy dddd";
             // 
             // parameterComboBox
             // 
@@ -74,7 +79,7 @@ namespace Invertor_sim
             chartArea1.AxisX.LabelStyle.Format = "F0";
             chartArea1.AxisX.MajorGrid.LineColor = System.Drawing.Color.Silver;
             chartArea1.AxisX.MajorGrid.LineDashStyle = System.Windows.Forms.DataVisualization.Charting.ChartDashStyle.Dot;
-            chartArea1.AxisX.Maximum = 100D;
+            chartArea1.AxisX.Maximum = 1440D;
             chartArea1.AxisX.Minimum = 0D;
             chartArea1.AxisY.LabelStyle.Format = "F2";
             chartArea1.AxisY.MajorGrid.LineColor = System.Drawing.Color.Silver;
