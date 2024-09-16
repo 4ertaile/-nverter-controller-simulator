@@ -42,31 +42,33 @@ namespace Invertor_sim
             this.chartButton = new System.Windows.Forms.Button();
             this.averageLabel = new System.Windows.Forms.Label();
             this.generateButton = new System.Windows.Forms.Button();
+            this.label1 = new System.Windows.Forms.Label();
+            this.label2 = new System.Windows.Forms.Label();
+            this.sim = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.chart)).BeginInit();
             this.SuspendLayout();
             // 
             // dateTimePicker
             // 
+            this.dateTimePicker.CustomFormat = "MM-dd-yyyy dddd";
+            this.dateTimePicker.Format = System.Windows.Forms.DateTimePickerFormat.Custom;
             this.dateTimePicker.Location = new System.Drawing.Point(11, 12);
             this.dateTimePicker.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             this.dateTimePicker.Name = "dateTimePicker";
             this.dateTimePicker.Size = new System.Drawing.Size(224, 26);
             this.dateTimePicker.TabIndex = 0;
-            // Set the Format type and the CustomFormat string.
-            this.dateTimePicker.Format = DateTimePickerFormat.Custom;
-            dateTimePicker.CustomFormat = "MM-dd-yyyy dddd";
             // 
             // parameterComboBox
             // 
             this.parameterComboBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.parameterComboBox.FormattingEnabled = true;
             this.parameterComboBox.Items.AddRange(new object[] {
-            "Input Voltage",
-            "Battery Voltage",
-            "Battery Percentage",
-            "Solar Panel Voltage",
-            "Solar Generation Power",
-            "User Power Usage"});
+            Invertor_sim.Parameter.Input_Voltage,
+            Invertor_sim.Parameter.Battery_Voltage,
+            Invertor_sim.Parameter.Battery_Percentage,
+            Invertor_sim.Parameter.Solar_Panel_Voltage,
+            Invertor_sim.Parameter.Solar_Generation_Power,
+            Invertor_sim.Parameter.User_Power_Usage});
             this.parameterComboBox.Location = new System.Drawing.Point(11, 50);
             this.parameterComboBox.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             this.parameterComboBox.Name = "parameterComboBox";
@@ -99,7 +101,7 @@ namespace Invertor_sim
             // 
             // minBox
             // 
-            this.minBox.Location = new System.Drawing.Point(11, 600);
+            this.minBox.Location = new System.Drawing.Point(59, 602);
             this.minBox.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             this.minBox.Name = "minBox";
             this.minBox.Size = new System.Drawing.Size(112, 26);
@@ -107,7 +109,7 @@ namespace Invertor_sim
             // 
             // maxBox
             // 
-            this.maxBox.Location = new System.Drawing.Point(135, 600);
+            this.maxBox.Location = new System.Drawing.Point(227, 602);
             this.maxBox.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             this.maxBox.Name = "maxBox";
             this.maxBox.Size = new System.Drawing.Size(112, 26);
@@ -115,7 +117,7 @@ namespace Invertor_sim
             // 
             // chartButton
             // 
-            this.chartButton.Location = new System.Drawing.Point(259, 600);
+            this.chartButton.Location = new System.Drawing.Point(361, 602);
             this.chartButton.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             this.chartButton.Name = "chartButton";
             this.chartButton.Size = new System.Drawing.Size(84, 29);
@@ -127,14 +129,15 @@ namespace Invertor_sim
             // averageLabel
             // 
             this.averageLabel.AutoSize = true;
-            this.averageLabel.Location = new System.Drawing.Point(11, 638);
+            this.averageLabel.Location = new System.Drawing.Point(17, 647);
             this.averageLabel.Name = "averageLabel";
-            this.averageLabel.Size = new System.Drawing.Size(0, 20);
+            this.averageLabel.Size = new System.Drawing.Size(35, 20);
             this.averageLabel.TabIndex = 6;
+            this.averageLabel.Text = "text";
             // 
             // generateButton
             // 
-            this.generateButton.Location = new System.Drawing.Point(259, 638);
+            this.generateButton.Location = new System.Drawing.Point(361, 643);
             this.generateButton.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             this.generateButton.Name = "generateButton";
             this.generateButton.Size = new System.Drawing.Size(84, 29);
@@ -143,11 +146,42 @@ namespace Invertor_sim
             this.generateButton.UseVisualStyleBackColor = true;
             this.generateButton.Click += new System.EventHandler(this.GenerateButton_Click);
             // 
+            // label1
+            // 
+            this.label1.AutoSize = true;
+            this.label1.Location = new System.Drawing.Point(17, 605);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(38, 20);
+            this.label1.TabIndex = 8;
+            this.label1.Text = "Min:";
+            // 
+            // label2
+            // 
+            this.label2.AutoSize = true;
+            this.label2.Location = new System.Drawing.Point(179, 605);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(42, 20);
+            this.label2.TabIndex = 9;
+            this.label2.Text = "Max:";
+            // 
+            // sim
+            // 
+            this.sim.Location = new System.Drawing.Point(853, 9);
+            this.sim.Name = "sim";
+            this.sim.Size = new System.Drawing.Size(126, 36);
+            this.sim.TabIndex = 10;
+            this.sim.Text = "Simulator";
+            this.sim.UseVisualStyleBackColor = true;
+            this.sim.Click += new System.EventHandler(this.sim_Click);
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(991, 700);
+            this.Controls.Add(this.sim);
+            this.Controls.Add(this.label2);
+            this.Controls.Add(this.label1);
             this.Controls.Add(this.generateButton);
             this.Controls.Add(this.averageLabel);
             this.Controls.Add(this.chartButton);
@@ -175,5 +209,8 @@ namespace Invertor_sim
         private System.Windows.Forms.Button chartButton;
         private System.Windows.Forms.Label averageLabel;
         private System.Windows.Forms.Button generateButton;
+        private Label label1;
+        private Label label2;
+        private Button sim;
     }
 }

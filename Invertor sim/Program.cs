@@ -16,7 +16,13 @@ namespace Invertor_sim
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+
+
+            MainForm main = new MainForm();
+            Simulator sim = new Simulator(main);
+
+            main.AddSimulatorForm(sim);
+            Application.Run(main);
         }
     }
 }

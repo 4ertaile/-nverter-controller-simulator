@@ -10,22 +10,26 @@ using System.Windows.Forms.DataVisualization.Charting;
 
 namespace Invertor_sim
 {
-    
     public partial class MainForm : Form
     {
+        
         const int minutsInDay = 1440;
         private List<InverterData> inverterDataList;
         private bool isDrawing = false;
         private int currentXValue = 0;
         private string currentParameter;
         private Dictionary<string, List<float>> parameterValues = new Dictionary<string, List<float>>();
+        private Simulator simulator;
 
         public MainForm()
         {
             InitializeComponent();
-             parameterComboBox.SelectedIndex = 0;
+            parameterComboBox.SelectedIndex = 0;
         }
-
+        public void AddSimulatorForm(Simulator sim)
+        {
+            simulator = sim;
+        }
         // Вибір параметра зі списку
         private void ParameterComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
@@ -57,8 +61,8 @@ namespace Invertor_sim
         private void ChartButton_Click(object sender, EventArgs e)
         {
             // Перевірка, чи введені коректні мінімальні і максимальні значення
-            if (!double.TryParse(minBox.Text, out double minValue) ||
-                !double.TryParse(maxBox.Text, out double maxValue) || minValue >= maxValue)
+            if (!float.TryParse(minBox.Text, out float minValue) ||
+                !float.TryParse(maxBox.Text, out float maxValue) || minValue >= maxValue)
             {
                 MessageBox.Show("Please enter valid minimum and maximum values. Maximum must be greater than minimum.");
                 return;
@@ -117,7 +121,7 @@ namespace Invertor_sim
         {
             if (parameterValues.ContainsKey(currentParameter))
             {
-                double average = 0;
+                float average = 0;
                 if (parameterValues[currentParameter].Count > 0)
                 {
                     average = parameterValues[currentParameter].Average();
@@ -146,41 +150,66 @@ namespace Invertor_sim
                 var data = new InverterData
                 {
                     Time = currentTime.ToString("H:mm:ss"),
-                    InputVoltage = GetParameterValueAtCurrentX("Input Voltage", xValue),
-                    BatteryVoltage = GetParameterValueAtCurrentX("Battery Voltage", xValue),
-                    BatteryPercentage = GetParameterValueAtCurrentX("Battery Percentage", xValue),
-                    SolarPanelVoltage = GetParameterValueAtCurrentX("Solar Panel Voltage", xValue),
-                    SolarGenerationPower = GetParameterValueAtCurrentX("Solar Generation Power", xValue),
-                    UserPowerUsage = GetParameterValueAtCurrentX("User Power Usage", xValue)
+                    InputVoltage = GetParameterValueAtCurrentX(Parameter.Input_Voltage.ToString(), xValue),
+                    BatteryVoltage = GetParameterValueAtCurrentX(Parameter.Battery_Voltage.ToString(), xValue),
+                    BatteryPercentage = GetParameterValueAtCurrentX(Parameter.Battery_Percentage.ToString(), xValue),
+                    SolarPanelVoltage = GetParameterValueAtCurrentX(Parameter.Solar_Panel_Voltage.ToString(), xValue),
+                    SolarGenerationPower = GetParameterValueAtCurrentX(Parameter.Solar_Generation_Power.ToString(), xValue),
+                    UserPowerUsage = GetParameterValueAtCurrentX(Parameter.User_Power_Usage.ToString(), xValue)
                 };
-
                 inverterDataList.Add(data);
                 currentTime = currentTime.AddMinutes(5);
-                xValue+=5; // Increment xValue for the next iteration
+                xValue += 5; // Increment xValue for the next iteration
             }
 
             SaveDataToFile();
         }
 
+        // Метод для отримання значення параметра в певний момент часу з округленням до 2 знаків після коми
         private float GetParameterValueAtCurrentX(string parameter, int xValue)
         {
-            // Check if the parameter exists in the dictionary, if not — return 0
             if (parameterValues.ContainsKey(parameter) && parameterValues[parameter].Count > xValue)
             {
-                return parameterValues[parameter][xValue]; // Return the value at the current X position
+                // Округлюємо до 2 знаків після коми
+                return (float)Math.Round(parameterValues[parameter][xValue], 2);
             }
-            return 0; // If no data, return 0
+            return 0;
         }
 
-        // Збереження даних у файл
+        // Збереження даних у файл із округленими значеннями
         private void SaveDataToFile()
         {
             string date = dateTimePicker.Value.ToString("yyyy-MM-dd");
             string fileName = $"InverterData_{date}.json";
-            string jsonString = JsonConvert.SerializeObject(inverterDataList, Formatting.Indented);
+
+            // Округлюємо кожне значення перед серіалізацією
+            var roundedInverterDataList = inverterDataList.Select(data => new InverterData
+            {
+                Time = data.Time,
+                InputVoltage = (float)Math.Round(data.InputVoltage, 2),
+                BatteryVoltage = (float)Math.Round(data.BatteryVoltage, 2),
+                BatteryPercentage = (float)Math.Round(data.BatteryPercentage, 2),
+                SolarPanelVoltage = (float)Math.Round(data.SolarPanelVoltage, 2),
+                SolarGenerationPower = (float)Math.Round(data.SolarGenerationPower, 2),
+                UserPowerUsage = (float)Math.Round(data.UserPowerUsage, 2)
+            }).ToList();
+
+            string jsonString = JsonConvert.SerializeObject(roundedInverterDataList, Formatting.Indented);
 
             File.WriteAllText(fileName, jsonString);
             MessageBox.Show($"Data saved to {fileName}");
+        }
+
+        private void sim_Click(object sender, EventArgs e)
+        {
+            this.Hide();
+            if (simulator == null || simulator.IsDisposed)
+            {
+                Simulator sim = new Simulator(this);
+                simulator = sim;
+            }
+            simulator.Show();
+            simulator.Location = this.Location;
         }
     }
 }
