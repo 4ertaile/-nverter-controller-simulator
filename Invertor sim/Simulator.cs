@@ -3,7 +3,10 @@ using System.IO;
 using System.IO.Ports;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using NModbus;
+using NModbus.Serial;
 
 namespace Invertor_sim
 {
@@ -13,10 +16,11 @@ namespace Invertor_sim
         private SerialPort serialPort;
         private System.Windows.Forms.Timer portCheckTimer;
         private string[] previousPorts;
-        private Thread simulationThread;  // Окрема нитка для симулятора інвертора
-        private bool isRunning = false;   // Флаг для контролю роботи симулятора
+        private CancellationTokenSource cts; // Для контролю зупинки симулятора
+        private IModbusSerialMaster modbusMaster;
+        private IModbusFactory modbusFactory;
+        private ushort[] holdingRegisters;
 
-        // Структура даних інвертора
         public struct InverterData
         {
             public float batteryVoltage;
@@ -31,34 +35,41 @@ namespace Invertor_sim
             InitializeComponent();
             this.main = main;
 
-            // Ініціалізуємо таймер для перевірки доступних портів
+            // Ініціалізація Modbus
+            modbusFactory = new ModbusFactory();
+            holdingRegisters = new ushort[10];
+            holdingRegisters[0] = 80; // SOC
+            holdingRegisters[1] = 2560; // Напруга батареї
+
             portCheckTimer = new System.Windows.Forms.Timer();
-            portCheckTimer.Interval = 5000;  // Перевіряємо кожні 5 секунд
+            portCheckTimer.Interval = 5000;
             portCheckTimer.Tick += new EventHandler(CheckAvailablePorts);
             portCheckTimer.Start();
 
-            // Заповнення ComboBox портів при старті
             previousPorts = SerialPort.GetPortNames();
             comboBoxPorts.Items.AddRange(previousPorts);
 
-            // Встановлення дефолтної швидкості
             comboBoxBaudRate.Items.Add("9600");
             comboBoxBaudRate.Items.Add("115200");
-            comboBoxBaudRate.SelectedIndex = 0; // За замовчуванням 9600
+            comboBoxBaudRate.SelectedIndex = 0;
 
-            // Підписуємось на подію вибору порту
             comboBoxPorts.SelectedIndexChanged += ComboBoxPorts_SelectedIndexChanged;
-
-            // Кнопка для ручного відправлення команд
-            buttonSend.Click += buttonSend_Click;
         }
 
-        private void ComboBoxPorts_SelectedIndexChanged(object sender, EventArgs e)
+        private async void ComboBoxPorts_SelectedIndexChanged(object sender, EventArgs e)
         {
-            // Закриваємо поточний порт, якщо відкритий
             if (serialPort != null && serialPort.IsOpen)
             {
-                serialPort.Close();
+                try
+                {
+                    serialPort.DataReceived -= DataReceivedHandler;
+                    serialPort.Close();
+                }
+                catch (Exception ex)
+                {
+                    // Виводимо помилку, якщо не вдалося закрити порт
+                    labelStatus.Text = "Error closing port: " + ex.Message;
+                }
             }
 
             string selectedPort = comboBoxPorts.SelectedItem.ToString();
@@ -66,18 +77,19 @@ namespace Invertor_sim
 
             try
             {
-                // Створюємо новий екземпляр SerialPort
                 serialPort = new SerialPort(selectedPort, baudRate, Parity.None, 8, StopBits.One);
-                serialPort.DataReceived += new SerialDataReceivedEventHandler(DataReceivedHandler);
-
-                // Пробуємо відкрити порт
                 serialPort.Open();
-                labelStatus.Text = "Connected to " + selectedPort;
 
-                // Запускаємо симуляцію інвертора в окремій нитці
-                isRunning = true;
-                simulationThread = new Thread(SimulatorLoop);
-                simulationThread.Start();
+                // Ініціалізація Modbus
+                modbusMaster = modbusFactory.CreateRtuMaster(serialPort);
+
+                cts = new CancellationTokenSource();
+                await Task.Run(() => MonitorPort(cts.Token), cts.Token);
+
+                // Підключаємо обробник подій для отримання даних
+                serialPort.DataReceived += DataReceivedHandler;
+
+                labelStatus.Text = "Connected to " + selectedPort;
             }
             catch (UnauthorizedAccessException)
             {
@@ -87,124 +99,137 @@ namespace Invertor_sim
             {
                 labelStatus.Text = "Error: Failed to open port. Port may not be available.";
             }
-            catch (Exception ex)  // Для будь-яких інших помилок
+            catch (Exception ex)
             {
                 labelStatus.Text = "Error: " + ex.Message;
             }
         }
 
-        private void buttonSend_Click(object sender, EventArgs e)
+        private void PrintDataToConsole(byte[] data)
         {
-            if (serialPort != null && serialPort.IsOpen)
+            Console.WriteLine("Received Packet:");
+            for (int i = 0; i < data.Length; i++)
             {
-                string command = textBoxSendCommand.Text;
-                serialPort.WriteLine(command);
-                listBoxSentCommands.Items.Add("Sent: " + command);
+                Console.Write($"0x{data[i]:X2} ");
             }
+            Console.WriteLine();
         }
 
         private void DataReceivedHandler(object sender, SerialDataReceivedEventArgs e)
         {
-            string receivedData = serialPort.ReadLine();
+            if (serialPort == null || !serialPort.IsOpen)
+                return;
+
+            // Зчитування даних з порту
+            byte[] buffer = new byte[serialPort.BytesToRead];
+            serialPort.Read(buffer, 0, buffer.Length);
+
+            // Виведення даних на консоль
+            PrintDataToConsole(buffer);
+
+            // Виведення даних на форму
             Invoke(new Action(() =>
             {
-                listBoxReceivedCommands.Items.Add("Received: " + receivedData);
+                listBoxReceivedCommands.Items.Add("Received: " + BitConverter.ToString(buffer));
             }));
 
-            // Обробка вхідних команд
-            byte command = Convert.ToByte(receivedData);
-            InverterData data = new InverterData
+            // Обробка Modbus запитів
+            try
             {
-                batteryVoltage = 48.5f,
-                gridCurrent = 15.2f,
-                solarVoltage = 320.7f,
-                solarPower = 800.0f,
-                batteryChargeDischargePower = -50.0f
-            };
-
-            if (command == 0x03)  // Запит всіх даних (GET_FULL_DATA)
-            {
-                SendData(data);  // Відправляємо всі дані
+                var request = modbusMaster.ReadHoldingRegisters(1, 0, 10); // 1 - адреса раба, 0 - початкова адреса, 10 - кількість регістрів
+                ProcessRequest(request);
             }
-            else if (command == 0x04)  // Запит вольтажу батареї (GET_BATTERY_VOLTAGE)
+            catch (Exception ex)
             {
-                SendSingleValue(data.batteryVoltage);  // Відправляємо лише вольтаж
-            }
-        }
-
-        private void SendData(InverterData data)
-        {
-            byte[] responseData = StructToByteArray(data);
-            serialPort.Write(responseData, 0, responseData.Length);
-            Invoke(new Action(() =>
-            {
-                listBoxSentCommands.Items.Add("Sent: Full data");
-            }));
-        }
-
-        private void SendSingleValue(float value)
-        {
-            byte[] responseValue = BitConverter.GetBytes(value);
-            serialPort.Write(responseValue, 0, responseValue.Length);
-            Invoke(new Action(() =>
-            {
-                listBoxSentCommands.Items.Add("Sent: Battery voltage - " + value);
-            }));
-        }
-
-        private byte[] StructToByteArray(InverterData data)
-        {
-            int size = sizeof(float) * 5;
-            byte[] arr = new byte[size];
-
-            Buffer.BlockCopy(BitConverter.GetBytes(data.batteryVoltage), 0, arr, 0, sizeof(float));
-            Buffer.BlockCopy(BitConverter.GetBytes(data.gridCurrent), 0, arr, 4, sizeof(float));
-            Buffer.BlockCopy(BitConverter.GetBytes(data.solarVoltage), 0, arr, 8, sizeof(float));
-            Buffer.BlockCopy(BitConverter.GetBytes(data.solarPower), 0, arr, 12, sizeof(float));
-            Buffer.BlockCopy(BitConverter.GetBytes(data.batteryChargeDischargePower), 0, arr, 16, sizeof(float));
-
-            return arr;
-        }
-
-        // Метод для перевірки нових доступних портів
-        private void CheckAvailablePorts(object sender, EventArgs e)
-        {
-            string[] currentPorts = SerialPort.GetPortNames();
-
-            // Якщо доступні порти змінилися, оновлюємо ComboBox
-            if (!currentPorts.SequenceEqual(previousPorts))
-            {
-                previousPorts = currentPorts;
-
-                comboBoxPorts.Items.Clear();
-                comboBoxPorts.Items.AddRange(currentPorts);
-
-                // Якщо порт був відкритий, а зараз зник, закриваємо його
-                if (serialPort != null && serialPort.IsOpen && !currentPorts.Contains(serialPort.PortName))
+                Invoke(new Action(() =>
                 {
-                    serialPort.Close();
-                    labelStatus.Text = "Disconnected";
-                }
+                    listBoxReceivedCommands.Items.Add("Error: " + ex.Message);
+                }));
             }
         }
 
-        private void SimulatorLoop()
+        private void ProcessRequest(ushort[] request)
         {
-            while (isRunning)
+            // Обробка запиту Modbus
+            holdingRegisters = request;
+
+            // Перетворення ushort[] на byte[]
+            byte[] byteArray = holdingRegisters.SelectMany(BitConverter.GetBytes).ToArray();
+
+            // Наприклад, відправляємо дані на запит
+            Invoke(new Action(() =>
             {
-                Thread.Sleep(100);  // Імітація очікування запитів
+                listBoxSentCommands.Items.Add("Sent: " + BitConverter.ToString(byteArray));
+            }));
+        }
+
+        private async Task MonitorPort(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    // Постійне зчитування запитів
+                    var request = modbusMaster.ReadHoldingRegisters(1, 0, 10); // 1 - адреса раба, 0 - початкова адреса, 10 - кількість регістрів
+                    ProcessRequest(request);
+                }
+                catch (Exception ex)
+                {
+                    Invoke(new Action(() =>
+                    {
+                        listBoxReceivedCommands.Items.Add("Monitor Error: " + ex.Message);
+                    }));
+                }
+                await Task.Delay(100); // Затримка для уникнення надмірного використання ресурсів
             }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             base.OnFormClosing(e);
-            isRunning = false;  // Зупиняємо симулятор
-            if (simulationThread != null && simulationThread.IsAlive)
+            if (cts != null)
             {
-                simulationThread.Join();  // Очікуємо завершення потоку
+                cts.Cancel(); // Зупиняємо моніторинг
             }
-            Application.Exit();  // Завершуємо програму
+            if (serialPort != null && serialPort.IsOpen)
+            {
+                try
+                {
+                    serialPort.DataReceived -= DataReceivedHandler;
+                    serialPort.Close();
+                }
+                catch (Exception ex)
+                {
+                    // Виводимо помилку, якщо не вдалося закрити порт
+                    labelStatus.Text = "Error closing port: " + ex.Message;
+                }
+            }
+            Application.Exit();
+        }
+
+        private void CheckAvailablePorts(object sender, EventArgs e)
+        {
+            string[] currentPorts = SerialPort.GetPortNames();
+            if (!currentPorts.SequenceEqual(previousPorts))
+            {
+                previousPorts = currentPorts;
+                comboBoxPorts.Items.Clear();
+                comboBoxPorts.Items.AddRange(currentPorts);
+
+                if (serialPort != null && serialPort.IsOpen && !currentPorts.Contains(serialPort.PortName))
+                {
+                    try
+                    {
+                        serialPort.DataReceived -= DataReceivedHandler;
+                        serialPort.Close();
+                        labelStatus.Text = "Disconnected";
+                    }
+                    catch (Exception ex)
+                    {
+                        labelStatus.Text = "Error closing port: " + ex.Message;
+                    }
+                }
+            }
         }
     }
 }
