@@ -158,8 +158,8 @@ namespace Invertor_sim
                     UserPowerUsage = GetParameterValueAtCurrentX(Parameter.User_Power_Usage.ToString(), xValue)
                 };
                 inverterDataList.Add(data);
-                currentTime = currentTime.AddMinutes(5);
-                xValue += 5; // Increment xValue for the next iteration
+                currentTime = currentTime.AddMinutes(1);
+                xValue ++; // Increment xValue for the next iteration
             }
 
             SaveDataToFile();
