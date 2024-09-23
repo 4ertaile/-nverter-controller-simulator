@@ -39,9 +39,9 @@ namespace Invertor_sim
             this.chart = new System.Windows.Forms.DataVisualization.Charting.Chart();
             this.minBox = new System.Windows.Forms.TextBox();
             this.maxBox = new System.Windows.Forms.TextBox();
-            this.chartButton = new System.Windows.Forms.Button();
+            this.chartWriteButton = new System.Windows.Forms.Button();
             this.averageLabel = new System.Windows.Forms.Label();
-            this.generateButton = new System.Windows.Forms.Button();
+            this.generateFileBut = new System.Windows.Forms.Button();
             this.label1 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
             this.sim = new System.Windows.Forms.Button();
@@ -52,10 +52,10 @@ namespace Invertor_sim
             // 
             this.dateTimePicker.CustomFormat = "MM-dd-yyyy dddd";
             this.dateTimePicker.Format = System.Windows.Forms.DateTimePickerFormat.Custom;
-            this.dateTimePicker.Location = new System.Drawing.Point(11, 12);
-            this.dateTimePicker.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.dateTimePicker.Location = new System.Drawing.Point(7, 8);
+            this.dateTimePicker.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
             this.dateTimePicker.Name = "dateTimePicker";
-            this.dateTimePicker.Size = new System.Drawing.Size(224, 26);
+            this.dateTimePicker.Size = new System.Drawing.Size(151, 20);
             this.dateTimePicker.TabIndex = 0;
             // 
             // parameterComboBox
@@ -69,10 +69,10 @@ namespace Invertor_sim
             Invertor_sim.Parameter.Solar_Panel_Voltage,
             Invertor_sim.Parameter.Solar_Generation_Power,
             Invertor_sim.Parameter.User_Power_Usage});
-            this.parameterComboBox.Location = new System.Drawing.Point(11, 50);
-            this.parameterComboBox.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.parameterComboBox.Location = new System.Drawing.Point(7, 32);
+            this.parameterComboBox.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
             this.parameterComboBox.Name = "parameterComboBox";
-            this.parameterComboBox.Size = new System.Drawing.Size(224, 28);
+            this.parameterComboBox.Size = new System.Drawing.Size(151, 21);
             this.parameterComboBox.TabIndex = 1;
             this.parameterComboBox.SelectedIndexChanged += new System.EventHandler(this.ParameterComboBox_SelectedIndexChanged);
             // 
@@ -88,87 +88,91 @@ namespace Invertor_sim
             chartArea1.AxisY.MajorGrid.LineDashStyle = System.Windows.Forms.DataVisualization.Charting.ChartDashStyle.Dot;
             chartArea1.Name = "ChartArea1";
             this.chart.ChartAreas.Add(chartArea1);
-            this.chart.Location = new System.Drawing.Point(11, 88);
-            this.chart.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.chart.Location = new System.Drawing.Point(7, 57);
+            this.chart.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
             this.chart.Name = "chart";
             series1.ChartArea = "ChartArea1";
             series1.ChartType = System.Windows.Forms.DataVisualization.Charting.SeriesChartType.Line;
             series1.Name = "Data";
             this.chart.Series.Add(series1);
-            this.chart.Size = new System.Drawing.Size(900, 500);
+            this.chart.Size = new System.Drawing.Size(600, 325);
             this.chart.TabIndex = 2;
             this.chart.MouseMove += new System.Windows.Forms.MouseEventHandler(this.Chart_MouseMove);
             // 
             // minBox
             // 
-            this.minBox.Location = new System.Drawing.Point(59, 602);
-            this.minBox.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.minBox.Location = new System.Drawing.Point(39, 391);
+            this.minBox.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
             this.minBox.Name = "minBox";
-            this.minBox.Size = new System.Drawing.Size(112, 26);
+            this.minBox.Size = new System.Drawing.Size(76, 20);
             this.minBox.TabIndex = 3;
             // 
             // maxBox
             // 
-            this.maxBox.Location = new System.Drawing.Point(227, 602);
-            this.maxBox.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.maxBox.Location = new System.Drawing.Point(151, 391);
+            this.maxBox.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
             this.maxBox.Name = "maxBox";
-            this.maxBox.Size = new System.Drawing.Size(112, 26);
+            this.maxBox.Size = new System.Drawing.Size(76, 20);
             this.maxBox.TabIndex = 4;
             // 
-            // chartButton
+            // chartWriteButton
             // 
-            this.chartButton.Location = new System.Drawing.Point(361, 602);
-            this.chartButton.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.chartButton.Name = "chartButton";
-            this.chartButton.Size = new System.Drawing.Size(84, 29);
-            this.chartButton.TabIndex = 5;
-            this.chartButton.Text = "Draw";
-            this.chartButton.UseVisualStyleBackColor = true;
-            this.chartButton.Click += new System.EventHandler(this.ChartButton_Click);
+            this.chartWriteButton.Location = new System.Drawing.Point(241, 391);
+            this.chartWriteButton.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
+            this.chartWriteButton.Name = "chartWriteButton";
+            this.chartWriteButton.Size = new System.Drawing.Size(56, 19);
+            this.chartWriteButton.TabIndex = 5;
+            this.chartWriteButton.Text = "Draw";
+            this.chartWriteButton.UseVisualStyleBackColor = true;
+            this.chartWriteButton.Click += new System.EventHandler(this.ChartButton_Click);
             // 
             // averageLabel
             // 
             this.averageLabel.AutoSize = true;
-            this.averageLabel.Location = new System.Drawing.Point(17, 647);
+            this.averageLabel.Location = new System.Drawing.Point(11, 421);
+            this.averageLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.averageLabel.Name = "averageLabel";
-            this.averageLabel.Size = new System.Drawing.Size(35, 20);
+            this.averageLabel.Size = new System.Drawing.Size(24, 13);
             this.averageLabel.TabIndex = 6;
             this.averageLabel.Text = "text";
             // 
-            // generateButton
+            // generateFileBut
             // 
-            this.generateButton.Location = new System.Drawing.Point(361, 643);
-            this.generateButton.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.generateButton.Name = "generateButton";
-            this.generateButton.Size = new System.Drawing.Size(84, 29);
-            this.generateButton.TabIndex = 7;
-            this.generateButton.Text = "Generate";
-            this.generateButton.UseVisualStyleBackColor = true;
-            this.generateButton.Click += new System.EventHandler(this.GenerateButton_Click);
+            this.generateFileBut.Location = new System.Drawing.Point(241, 418);
+            this.generateFileBut.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
+            this.generateFileBut.Name = "generateFileBut";
+            this.generateFileBut.Size = new System.Drawing.Size(56, 19);
+            this.generateFileBut.TabIndex = 7;
+            this.generateFileBut.Text = "Generate";
+            this.generateFileBut.UseVisualStyleBackColor = true;
+            this.generateFileBut.Click += new System.EventHandler(this.GenerateButton_Click);
             // 
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(17, 605);
+            this.label1.Location = new System.Drawing.Point(11, 393);
+            this.label1.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(38, 20);
+            this.label1.Size = new System.Drawing.Size(27, 13);
             this.label1.TabIndex = 8;
             this.label1.Text = "Min:";
             // 
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(179, 605);
+            this.label2.Location = new System.Drawing.Point(119, 393);
+            this.label2.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(42, 20);
+            this.label2.Size = new System.Drawing.Size(30, 13);
             this.label2.TabIndex = 9;
             this.label2.Text = "Max:";
             // 
             // sim
             // 
-            this.sim.Location = new System.Drawing.Point(853, 9);
+            this.sim.Location = new System.Drawing.Point(569, 6);
+            this.sim.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.sim.Name = "sim";
-            this.sim.Size = new System.Drawing.Size(126, 36);
+            this.sim.Size = new System.Drawing.Size(84, 23);
             this.sim.TabIndex = 10;
             this.sim.Text = "Simulator";
             this.sim.UseVisualStyleBackColor = true;
@@ -176,21 +180,21 @@ namespace Invertor_sim
             // 
             // MainForm
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(991, 700);
+            this.ClientSize = new System.Drawing.Size(661, 455);
             this.Controls.Add(this.sim);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.label1);
-            this.Controls.Add(this.generateButton);
+            this.Controls.Add(this.generateFileBut);
             this.Controls.Add(this.averageLabel);
-            this.Controls.Add(this.chartButton);
+            this.Controls.Add(this.chartWriteButton);
             this.Controls.Add(this.maxBox);
             this.Controls.Add(this.minBox);
             this.Controls.Add(this.chart);
             this.Controls.Add(this.parameterComboBox);
             this.Controls.Add(this.dateTimePicker);
-            this.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
             this.Name = "MainForm";
             this.Text = "Invertor Simulator";
             ((System.ComponentModel.ISupportInitialize)(this.chart)).EndInit();
@@ -206,9 +210,9 @@ namespace Invertor_sim
         private System.Windows.Forms.DataVisualization.Charting.Chart chart;
         private System.Windows.Forms.TextBox minBox;
         private System.Windows.Forms.TextBox maxBox;
-        private System.Windows.Forms.Button chartButton;
+        private System.Windows.Forms.Button chartWriteButton;
         private System.Windows.Forms.Label averageLabel;
-        private System.Windows.Forms.Button generateButton;
+        private System.Windows.Forms.Button generateFileBut;
         private Label label1;
         private Label label2;
         private Button sim;
