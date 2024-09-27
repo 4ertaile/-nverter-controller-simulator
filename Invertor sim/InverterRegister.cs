@@ -12,18 +12,7 @@ namespace Invertor_sim
 
         public ushort RegisterNumber { get; set; }
 
-        private float _value;
-        public float Value
-        {
-            get => _value;
-            set
-            {
-                if ((value >= MinValue) && (value <= MaxValue))
-                {
-                    _value = value;
-                }
-            }
-        }
+        public float Value { get; set; }
         public string Unit { get; set; }
         public float MinValue { get; set; }
         public float MaxValue { get; set; }

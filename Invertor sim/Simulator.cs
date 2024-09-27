@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Windows.Forms.DataVisualization.Charting;
 using NModbus;
 using NModbus.Serial;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
@@ -35,6 +36,10 @@ namespace Invertor_sim
         private int MaxPanelCountGrid2 = 0;
 
         private const int InvertorPowerUsage = 7;//5-7%
+
+        private  bool useFileSourse = false;
+
+
 
         private Battery[] batteries = new Battery[]
         {
@@ -95,11 +100,14 @@ namespace Invertor_sim
                 new InverterRegister(14, 0, "W", 0, 16000, "InputGenerator Power"),
                 new InverterRegister(15, 0, "V", 165, 290, "InputGenerator Voltage"),
                 new InverterRegister(16, 0, "W", 0, 7800, "InputSolarPower"),//all solar grid input
-                new InverterRegister(17, 0, "V", 125, 425, "InputSolarGrid1 Voltage"),
-                new InverterRegister(18, 0, "V", 125, 425, "InputSolarGrid2 Voltage"),
+                new InverterRegister(17, 0, "V", 0, 500, "InputSolarGrid1 Voltage"),
+                new InverterRegister(18, 0, "V", 0, 500, "InputSolarGrid2 Voltage"),
                 new InverterRegister(19, 0, "W", 0, 5525, "InputSolarGrid1 Power"),
                 new InverterRegister(20, 0, "W", 0, 5525, "InputSolarGrid2 Power"),
                 new InverterRegister(21, 0, "%", 0, 100, "Minimum Battery discharge"),
+                new InverterRegister(22, 0, "A", 0, 135, "Real Charge current"),
+                new InverterRegister(23, 0, "A", 0, 190, "Real discharge current"),
+                new InverterRegister(24, 0, "V", 125, 425, "MPPT Voltage"),
             };
             UpdateRegisterDisplay();
             //timer
@@ -142,19 +150,35 @@ namespace Invertor_sim
             currentTime = currentTime.AddSeconds(1); // Increment current time by one second
             labelCurrentTime.Text = currentTime.ToString("HH:mm:ss"); // Update time label
             UpdateRegisterDisplay();
-            UpdateBatteryInfo();
-            UpdateGridsPanelCount();
-            UpdateGridsPanelMaxPower();
+            
+            UpdateFormLabels();
 
 
             FindError();
-
-
-
             ShowError();
         }
 
+        private void UpdateFormLabels()
+        {
 
+            UpdateBatteryInfo();
+            UpdateGridsPanelCount();
+            UpdateGridsPanelMaxPower();
+            ShowInvertorInfo();
+
+            UpdateGrid1PanelCount();
+            UpdateGrid2PanelCount();
+
+            UpdateSolarGridSumInfo();
+            UpdateSolarGridInputInfo();
+
+            if(!useFileSourse)
+            {
+                UpdateVoltageSolarGrid();
+            }
+
+        }
+        
         private void ComboBoxPorts_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (comboBoxPorts.SelectedItem.ToString() == "Port Not Selected")
@@ -262,13 +286,13 @@ namespace Invertor_sim
         private void PanelTypeGrid1_SelectedIndexChanged(object sender, EventArgs e)
         {
             selectedPanelGrid1 = (SolarPanel)panelTypeGrid1.SelectedItem;
-            UpdateSolarGrid1Data();
+            UpdateSolarGridPanelCount1();
         }
 
         private void PanelTypeGrid2_SelectedIndexChanged(object sender, EventArgs e)
         {
             selectedPanelGrid2 = (SolarPanel)panelTypeGrid2.SelectedItem;
-            UpdateSolarGrid2Data();
+            UpdateSolarGridPanelCount2();
         }
 
         private void ComboBoxBattery_SelectedIndexChanged(object sender, EventArgs e)
@@ -319,6 +343,57 @@ namespace Invertor_sim
             main.Show();
             main.Location = this.Location;
         }
+        private void buttonSetnputSolPower1_Click(object sender, EventArgs e)
+        {
+            if (int.TryParse(setSolarGridPower1.Text, out int gridPower))
+            {
+                GetSolarGridPower(gridPower, registers[19], registers[20].Value, registers[16].MaxValue);
+            }
+        }
+
+        private void buttonSetnputSolPower2_Click(object sender, EventArgs e)
+        {
+            if (int.TryParse(setSolarGridPower2.Text, out int gridPower))
+            {
+                GetSolarGridPower(gridPower, registers[20], registers[19].Value, registers[16].MaxValue);
+            }
+        }
+        private void UpdateVoltageSolarGrid()
+        {
+            if (int.TryParse(setSolarGridPower1.Text, out int gridPower1))
+            {
+                SetVoltageGrid1(gridPower1);
+            }
+            if (int.TryParse(setSolarGridPower2.Text, out int gridPower2))
+            {
+                SetVoltageGrid2(gridPower2);
+            }
+        }
+        private void SetVoltageGrid1(int gridPower) {
+
+            registers[17].Value = CalculateMPPT(gridPower, PanelCountGrid1, selectedPanelGrid1.MaxWorkСurrent, selectedPanelGrid1.MaxWorkVoltage).Voltage;
+        }
+        private void SetVoltageGrid2(int gridPower)
+        {
+
+            registers[18].Value = CalculateMPPT(gridPower, PanelCountGrid2, selectedPanelGrid2.MaxWorkСurrent, selectedPanelGrid2.MaxWorkVoltage).Voltage;
+        }
+        private void GetSolarGridPower(int gridPower, InverterRegister solGridPowerRegister, float secondSolGridPowerRegister, float maxSolGridInputSum)
+        {
+            if (gridPower < 0)
+                return;
+
+            UpdateVoltageSolarGrid();
+            if (gridPower > solGridPowerRegister.MaxValue || !SolarGrid1CanGenerate())
+            {
+                solGridPowerRegister.Value = 0;
+                return;
+            }
+            solGridPowerRegister.Value = (secondSolGridPowerRegister + gridPower <= maxSolGridInputSum)
+            ? gridPower
+            : maxSolGridInputSum - secondSolGridPowerRegister;
+        }
+
 
         private void buttonConfirmTime_Click(object sender, EventArgs e)
         {
@@ -341,6 +416,17 @@ namespace Invertor_sim
         {
             UpdateGrid2PanelCount();
         }
+        private void checkBoxSolar1_MouseDown(object sender, MouseEventArgs e)
+        {
+            ((CheckBox)sender).Enabled = false;
+            ((CheckBox)sender).Enabled = true;
+        }
+
+        private void checkBoxSolar2_MouseDown(object sender, MouseEventArgs e)
+        {
+            ((CheckBox)sender).Enabled = false;
+            ((CheckBox)sender).Enabled = true;
+        }
         private void BatteryPower_Click(object sender, EventArgs e)
         {
             // Проверка корректности введённого значения
@@ -357,6 +443,7 @@ namespace Invertor_sim
         }
         //Add data to form
 
+       
         private void UpdateRegisterDisplay()//Замінити на форму з інформацією про регістри
         {
             listBoxBatteryInfo.Items.Clear(); // Очищення попереднього тексту
@@ -365,7 +452,48 @@ namespace Invertor_sim
                 listBoxBatteryInfo.Items.Add($"{register.Description}: {register.Value} {register.Unit}");
             }
         }
+        private void UpdateSolarGridInputInfo()
+        {
 
+            solarGridVoltage1.Text = registers[17].Value.ToString();
+            solarGridVoltage2.Text = registers[18].Value.ToString();
+
+            if (SolarGrid1CanGenerate())
+            {
+                checkBoxSolar1.Checked = true;
+                solarGridPower1.Text = registers[19].Value.ToString();
+            }
+            else
+            {
+                checkBoxSolar1.Checked = false;
+                solarGridPower1.Text = "0";
+            }
+
+            if (SolarGrid2CanGenerate())
+            {
+                checkBoxSolar2.Checked = true;
+                solarGridPower2.Text = registers[20].Value.ToString();
+            }
+            else
+            {
+                checkBoxSolar2.Checked = false;
+                solarGridPower2.Text = "0";
+            }
+
+        }
+
+        private bool SolarGrid1CanGenerate()//voltage must be between lowValue and hight value registr MPPT Voltage
+        {
+            return registers[24].MinValue < registers[17].Value && registers[17].Value <= registers[24].MaxValue;
+        }
+        private bool SolarGrid2CanGenerate()//voltage must be between lowValue and hight value registr MPPT Voltage
+        {
+            return registers[24].MinValue < registers[18].Value && registers[18].Value <= registers[24].MaxValue;
+        }
+        private void UpdateSolarGridSumInfo()
+        {
+            registers[16].Value = registers[19].Value + registers[20].Value;
+        }
         private void UpdateGridsPanelCount()
         {
             labelGrid1PanelCount.Text = PanelCountGrid1.ToString();
@@ -374,12 +502,31 @@ namespace Invertor_sim
 
         private void UpdateGridsPanelMaxPower()
         {
-            var Grip1MaxInput = (PanelCountGrid1 * selectedPanelGrid1.MaxWorkСurrent * selectedPanelGrid1.MaxWorkVoltage);
-            var Grip2MaxInput = (PanelCountGrid2 * selectedPanelGrid2.MaxWorkСurrent * selectedPanelGrid2.MaxWorkVoltage);
+            var Grid1MaxInput = GetMaxSolarGridPower1();
+            var Grid2MaxInput = GetMaxSolarGridPower2();
 
-            grid1MaxPower.Text = Grip1MaxInput.ToString();
-            grid2MaxPower.Text = Grip2MaxInput.ToString();
-            maxGripInput.Text = (Grip1MaxInput + Grip2MaxInput).ToString();
+            grid1MaxPower.Text = Grid1MaxInput.ToString();
+            grid2MaxPower.Text = Grid2MaxInput.ToString();
+            maxPosiibleSolarGridPower.Text = (Grid1MaxInput + Grid2MaxInput).ToString();
+        }
+        private void ShowInvertorInfo()
+        {
+            GridVoltageLimit.Text = "Grid Voltage Generation Limit: " + registers[24].MinValue + "-" + registers[24].MaxValue + " V";
+            MaxGridPowerSum.Text = "Max Grid Power Sum: " + registers[16].MaxValue;
+            MaxGridPower.Text = "Max Grid Power: " + registers[19].MaxValue;
+        }
+        private void UpdateBatteryBlockCount(int blockCount)
+        {
+            registers[2].Value = blockCount;
+
+        }
+        private float GetMaxSolarGridPower1()
+        {
+            return PanelCountGrid1 * selectedPanelGrid1.MaxWorkСurrent * selectedPanelGrid1.MaxWorkVoltage;
+        }
+        private float GetMaxSolarGridPower2()
+        {
+            return PanelCountGrid2 * selectedPanelGrid2.MaxWorkСurrent * selectedPanelGrid2.MaxWorkVoltage;
         }
         private void PrintDataToConsole(byte[] data)
         {
@@ -417,11 +564,7 @@ namespace Invertor_sim
             
 
         }
-        private void UpdateBatteryBlockCount(int blockCount)
-        {
-            registers[2].Value = blockCount;
 
-        }
         private void UpdateMaxPowerCapacity()
         {
             registers[8].Value = registers[4].Value * registers[2].Value * registers[3].Value; // Макс запас енергії
@@ -437,26 +580,25 @@ namespace Invertor_sim
             
 
         }
-        private void UpdateSolarGrid1Data()
+        
+        private void UpdateSolarGridPanelCount1()
         {
-            if (selectedPanelGrid1.OpenCircuitVoltage != 0)
-                MaxPanelCountGrid1 = (int)(registers[17].MaxValue / selectedPanelGrid1.OpenCircuitVoltage);
-            
-        }
-
-        private void UpdateSolarGrid2Data()
-        {
-            if(selectedPanelGrid2.OpenCircuitVoltage != 0)
-                MaxPanelCountGrid2 = (int)(registers[17].MaxValue / selectedPanelGrid2.OpenCircuitVoltage);
+            MaxPanelCountGrid1 = UpdateSolarGrid1Data(selectedPanelGrid1, registers[17].MaxValue, registers[24].MaxValue);
         }
         
-        private bool UpdateSolarGrid1PanelCount(NumericUpDown countPanelGrid, int  maxPanelCountGrid, SolarPanel selectedPanelGrid, float maxGridPower, float maxSecondGridPower)
+
+        private void UpdateSolarGridPanelCount2()
+        {
+            MaxPanelCountGrid2 = UpdateSolarGrid1Data(selectedPanelGrid2, registers[18].MaxValue, registers[24].MaxValue);
+        }
+        
+        private bool UpdateSolarGrid1PanelCount(NumericUpDown countPanelGrid, int  maxPanelCountGrid, SolarPanel selectedPanelGrid, float maxGridPower, float minGridVoltage, float maxSecondGridPower, float maxSolGridInputSum)
         {
             int formPanelCount = (int)countPanelGrid.Value;
             if(formPanelCount <= maxPanelCountGrid)
             {
                 var gridPower = formPanelCount * selectedPanelGrid.MaxWorkVoltage * selectedPanelGrid.MaxWorkСurrent;
-                if (maxGridPower >= gridPower && registers[16].MaxValue >= gridPower + maxSecondGridPower)
+                if (maxGridPower >= gridPower && maxSolGridInputSum >= gridPower + maxSecondGridPower && minGridVoltage < formPanelCount * selectedPanelGrid.MaxWorkVoltage)
                 {
                     return true;
                 }
@@ -470,7 +612,9 @@ namespace Invertor_sim
                                             MaxPanelCountGrid1,
                                             selectedPanelGrid1,
                                             registers[19].MaxValue,
-                                            selectedPanelGrid2.OpenCircuitVoltage * PanelCountGrid2))
+                                            registers[24].MinValue,
+                                            selectedPanelGrid2.MaxWorkСurrent * PanelCountGrid2 * selectedPanelGrid2.MaxWorkVoltage,
+                                            registers[16].MaxValue))
             {
                 PanelCountGrid1 = 0;
             }
@@ -486,7 +630,9 @@ namespace Invertor_sim
                                            MaxPanelCountGrid2,
                                            selectedPanelGrid2,
                                            registers[20].MaxValue,
-                                           selectedPanelGrid1.MaxWorkСurrent * PanelCountGrid1 * selectedPanelGrid1.MaxWorkVoltage))
+                                           registers[24].MinValue,
+                                           selectedPanelGrid1.MaxWorkСurrent * PanelCountGrid1 * selectedPanelGrid1.MaxWorkVoltage,
+                                           registers[16].MaxValue))
             {
                 PanelCountGrid2 = 0;
             }
@@ -521,7 +667,51 @@ namespace Invertor_sim
                 }
             }
         }
+        public (float Voltage, float Current) CalculateMPPT(float power, int panelCount, float maxPanelCurrent, float maxPanelVoltage) //перевірити правильність формули
+        {
+            if (panelCount == 0 || maxPanelCurrent == 0 || maxPanelVoltage == 0)
+                return (0, 0);
+            // Максимальна потужність однієї панелі
+            float maxPowerPerPanel = maxPanelVoltage * maxPanelCurrent;
 
+            // Загальна максимальна потужність від усіх панелей
+            float totalMaxPower = maxPowerPerPanel * panelCount;
+
+            // Якщо задана потужність більше максимальної, обмежуємо її
+            if (power > totalMaxPower)
+            {
+                power = totalMaxPower;
+            }
+
+            // Знаходимо відносне навантаження від максимальної потужності (частка потужності)
+            float powerRatio = power / totalMaxPower;
+
+            // Використовуємо пропорцію для визначення напруги та струму
+            float voltage = maxPanelVoltage * (float)Math.Sqrt(powerRatio) * panelCount;  // Пропорційне зменшення напруги
+            float current = maxPanelCurrent * powerRatio * panelCount;              // Пропорційне зменшення струму
+
+            return (voltage, current);
+        }
+        private int UpdateSolarGrid1Data(SolarPanel panel, float maxVoltage, float maxMPPT)//
+        {
+            int MaxPanelCountByVoltage = 0;//максимальна кількість панелей в межах вольтажу при холостому ході
+            int MaxPanelCountByMPPT = 0;//маскимальна кількість панеелй з якими інвертор може генерувати
+
+            if (panel.OpenCircuitVoltage != 0)
+            {
+                MaxPanelCountByVoltage = (int)(maxVoltage / panel.OpenCircuitVoltage);
+                MaxPanelCountByMPPT = (int)(maxMPPT / panel.MaxWorkVoltage);
+
+            }
+
+            if (MaxPanelCountByVoltage == MaxPanelCountByMPPT)
+                return MaxPanelCountByMPPT;
+            else if (MaxPanelCountByVoltage > MaxPanelCountByMPPT)
+                return MaxPanelCountByMPPT;
+            else
+                return MaxPanelCountByVoltage;
+
+        }
         //Errors check
 
 

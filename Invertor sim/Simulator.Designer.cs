@@ -62,12 +62,27 @@
             this.grid2MaxPower = new System.Windows.Forms.Label();
             this.grid1MaxPower = new System.Windows.Forms.Label();
             this.description5 = new System.Windows.Forms.Label();
-            this.description7 = new System.Windows.Forms.Label();
+            this.maxPosiibleSolarGridPower = new System.Windows.Forms.Label();
             this.description8 = new System.Windows.Forms.Label();
-            this.maxGripInput = new System.Windows.Forms.Label();
             this.description10 = new System.Windows.Forms.Label();
             this.description9 = new System.Windows.Forms.Label();
             this.description11 = new System.Windows.Forms.Label();
+            this.label4 = new System.Windows.Forms.Label();
+            this.label5 = new System.Windows.Forms.Label();
+            this.setSolarGridPower1 = new System.Windows.Forms.TextBox();
+            this.setSolarGridPower2 = new System.Windows.Forms.TextBox();
+            this.description13 = new System.Windows.Forms.Label();
+            this.checkBoxSolar1 = new System.Windows.Forms.CheckBox();
+            this.checkBoxSolar2 = new System.Windows.Forms.CheckBox();
+            this.solarGridPower1 = new System.Windows.Forms.Label();
+            this.solarGridPower2 = new System.Windows.Forms.Label();
+            this.solarGridVoltage2 = new System.Windows.Forms.Label();
+            this.solarGridVoltage1 = new System.Windows.Forms.Label();
+            this.MaxGridPowerSum = new System.Windows.Forms.Label();
+            this.GridVoltageLimit = new System.Windows.Forms.Label();
+            this.MaxGridPower = new System.Windows.Forms.Label();
+            this.buttonSetnputSolPower1 = new System.Windows.Forms.Button();
+            this.buttonSetnputSolPower2 = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.batteryElemntCount)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.countPanelGrid1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.countPanelGrid2)).BeginInit();
@@ -75,7 +90,7 @@
             // 
             // button1
             // 
-            this.button1.Location = new System.Drawing.Point(736, 7);
+            this.button1.Location = new System.Drawing.Point(736, 6);
             this.button1.Name = "button1";
             this.button1.Size = new System.Drawing.Size(93, 24);
             this.button1.TabIndex = 0;
@@ -360,43 +375,34 @@
             // description5
             // 
             this.description5.AutoSize = true;
-            this.description5.Location = new System.Drawing.Point(577, 158);
+            this.description5.Location = new System.Drawing.Point(445, 250);
             this.description5.Name = "description5";
-            this.description5.Size = new System.Drawing.Size(55, 13);
+            this.description5.Size = new System.Drawing.Size(26, 13);
             this.description5.TabIndex = 33;
-            this.description5.Text = "Grid setup";
+            this.description5.Text = "Grid";
             // 
-            // description7
+            // maxPosiibleSolarGridPower
             // 
-            this.description7.AutoSize = true;
-            this.description7.Location = new System.Drawing.Point(445, 179);
-            this.description7.Name = "description7";
-            this.description7.Size = new System.Drawing.Size(95, 13);
-            this.description7.TabIndex = 35;
-            this.description7.Text = "Max posible power";
+            this.maxPosiibleSolarGridPower.AutoSize = true;
+            this.maxPosiibleSolarGridPower.Location = new System.Drawing.Point(547, 159);
+            this.maxPosiibleSolarGridPower.Name = "maxPosiibleSolarGridPower";
+            this.maxPosiibleSolarGridPower.Size = new System.Drawing.Size(37, 13);
+            this.maxPosiibleSolarGridPower.TabIndex = 35;
+            this.maxPosiibleSolarGridPower.Text = "Power";
             // 
             // description8
             // 
             this.description8.AutoSize = true;
-            this.description8.Location = new System.Drawing.Point(681, 158);
+            this.description8.Location = new System.Drawing.Point(576, 250);
             this.description8.Name = "description8";
-            this.description8.Size = new System.Drawing.Size(59, 13);
+            this.description8.Size = new System.Drawing.Size(71, 13);
             this.description8.TabIndex = 36;
-            this.description8.Text = "Grid Power";
-            // 
-            // maxGripInput
-            // 
-            this.maxGripInput.AutoSize = true;
-            this.maxGripInput.Location = new System.Drawing.Point(445, 201);
-            this.maxGripInput.Name = "maxGripInput";
-            this.maxGripInput.Size = new System.Drawing.Size(85, 13);
-            this.maxGripInput.TabIndex = 38;
-            this.maxGripInput.Text = "Max Real Power";
+            this.description8.Text = "Grid Power In";
             // 
             // description10
             // 
             this.description10.AutoSize = true;
-            this.description10.Location = new System.Drawing.Point(577, 179);
+            this.description10.Location = new System.Drawing.Point(426, 271);
             this.description10.Name = "description10";
             this.description10.Size = new System.Drawing.Size(62, 13);
             this.description10.TabIndex = 39;
@@ -405,7 +411,7 @@
             // description9
             // 
             this.description9.AutoSize = true;
-            this.description9.Location = new System.Drawing.Point(577, 201);
+            this.description9.Location = new System.Drawing.Point(426, 293);
             this.description9.Name = "description9";
             this.description9.Size = new System.Drawing.Size(62, 13);
             this.description9.TabIndex = 40;
@@ -414,21 +420,180 @@
             // description11
             // 
             this.description11.AutoSize = true;
-            this.description11.Location = new System.Drawing.Point(766, 158);
+            this.description11.Location = new System.Drawing.Point(498, 250);
             this.description11.Name = "description11";
             this.description11.Size = new System.Drawing.Size(55, 13);
             this.description11.TabIndex = 41;
             this.description11.Text = "Grid input ";
             // 
+            // label4
+            // 
+            this.label4.AutoSize = true;
+            this.label4.Location = new System.Drawing.Point(426, 159);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(116, 13);
+            this.label4.TabIndex = 43;
+            this.label4.Text = "Max Work Power Sum:";
+            // 
+            // label5
+            // 
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(764, 250);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(65, 13);
+            this.label5.TabIndex = 44;
+            this.label5.Text = "Grid Voltage";
+            // 
+            // setSolarGridPower1
+            // 
+            this.setSolarGridPower1.Location = new System.Drawing.Point(494, 266);
+            this.setSolarGridPower1.Name = "setSolarGridPower1";
+            this.setSolarGridPower1.Size = new System.Drawing.Size(59, 20);
+            this.setSolarGridPower1.TabIndex = 45;
+            // 
+            // setSolarGridPower2
+            // 
+            this.setSolarGridPower2.Location = new System.Drawing.Point(494, 289);
+            this.setSolarGridPower2.Name = "setSolarGridPower2";
+            this.setSolarGridPower2.Size = new System.Drawing.Size(59, 20);
+            this.setSolarGridPower2.TabIndex = 46;
+            // 
+            // description13
+            // 
+            this.description13.AutoSize = true;
+            this.description13.Location = new System.Drawing.Point(663, 250);
+            this.description13.Name = "description13";
+            this.description13.Size = new System.Drawing.Size(76, 13);
+            this.description13.TabIndex = 49;
+            this.description13.Text = "Grid Can Used";
+            // 
+            // checkBoxSolar1
+            // 
+            this.checkBoxSolar1.AutoSize = true;
+            this.checkBoxSolar1.Location = new System.Drawing.Point(696, 270);
+            this.checkBoxSolar1.Name = "checkBoxSolar1";
+            this.checkBoxSolar1.Size = new System.Drawing.Size(15, 14);
+            this.checkBoxSolar1.TabIndex = 50;
+            this.checkBoxSolar1.UseVisualStyleBackColor = true;
+            this.checkBoxSolar1.MouseDown += new System.Windows.Forms.MouseEventHandler(this.checkBoxSolar1_MouseDown);
+            // 
+            // checkBoxSolar2
+            // 
+            this.checkBoxSolar2.AutoSize = true;
+            this.checkBoxSolar2.Location = new System.Drawing.Point(696, 293);
+            this.checkBoxSolar2.Name = "checkBoxSolar2";
+            this.checkBoxSolar2.Size = new System.Drawing.Size(15, 14);
+            this.checkBoxSolar2.TabIndex = 51;
+            this.checkBoxSolar2.UseVisualStyleBackColor = true;
+            this.checkBoxSolar2.MouseDown += new System.Windows.Forms.MouseEventHandler(this.checkBoxSolar2_MouseDown);
+            // 
+            // solarGridPower1
+            // 
+            this.solarGridPower1.AutoSize = true;
+            this.solarGridPower1.Location = new System.Drawing.Point(593, 271);
+            this.solarGridPower1.Name = "solarGridPower1";
+            this.solarGridPower1.Size = new System.Drawing.Size(13, 13);
+            this.solarGridPower1.TabIndex = 52;
+            this.solarGridPower1.Text = "0";
+            // 
+            // solarGridPower2
+            // 
+            this.solarGridPower2.AutoSize = true;
+            this.solarGridPower2.Location = new System.Drawing.Point(593, 292);
+            this.solarGridPower2.Name = "solarGridPower2";
+            this.solarGridPower2.Size = new System.Drawing.Size(13, 13);
+            this.solarGridPower2.TabIndex = 53;
+            this.solarGridPower2.Text = "0";
+            // 
+            // solarGridVoltage2
+            // 
+            this.solarGridVoltage2.AutoSize = true;
+            this.solarGridVoltage2.Location = new System.Drawing.Point(776, 292);
+            this.solarGridVoltage2.Name = "solarGridVoltage2";
+            this.solarGridVoltage2.Size = new System.Drawing.Size(35, 13);
+            this.solarGridVoltage2.TabIndex = 55;
+            this.solarGridVoltage2.Text = "label7";
+            // 
+            // solarGridVoltage1
+            // 
+            this.solarGridVoltage1.AutoSize = true;
+            this.solarGridVoltage1.Location = new System.Drawing.Point(776, 269);
+            this.solarGridVoltage1.Name = "solarGridVoltage1";
+            this.solarGridVoltage1.Size = new System.Drawing.Size(35, 13);
+            this.solarGridVoltage1.TabIndex = 54;
+            this.solarGridVoltage1.Text = "label6";
+            // 
+            // MaxGridPowerSum
+            // 
+            this.MaxGridPowerSum.AutoSize = true;
+            this.MaxGridPowerSum.Location = new System.Drawing.Point(655, 159);
+            this.MaxGridPowerSum.Name = "MaxGridPowerSum";
+            this.MaxGridPowerSum.Size = new System.Drawing.Size(109, 13);
+            this.MaxGridPowerSum.TabIndex = 56;
+            this.MaxGridPowerSum.Text = "Max Grid Power Sum:";
+            // 
+            // GridVoltageLimit
+            // 
+            this.GridVoltageLimit.AutoSize = true;
+            this.GridVoltageLimit.Location = new System.Drawing.Point(426, 185);
+            this.GridVoltageLimit.Name = "GridVoltageLimit";
+            this.GridVoltageLimit.Size = new System.Drawing.Size(147, 13);
+            this.GridVoltageLimit.TabIndex = 57;
+            this.GridVoltageLimit.Text = "Grid Voltage Generation Limit:";
+            // 
+            // MaxGridPower
+            // 
+            this.MaxGridPower.AutoSize = true;
+            this.MaxGridPower.Location = new System.Drawing.Point(655, 185);
+            this.MaxGridPower.Name = "MaxGridPower";
+            this.MaxGridPower.Size = new System.Drawing.Size(85, 13);
+            this.MaxGridPower.TabIndex = 58;
+            this.MaxGridPower.Text = "Max Grid Power:";
+            // 
+            // buttonSetnputSolPower1
+            // 
+            this.buttonSetnputSolPower1.Location = new System.Drawing.Point(551, 265);
+            this.buttonSetnputSolPower1.Name = "buttonSetnputSolPower1";
+            this.buttonSetnputSolPower1.Size = new System.Drawing.Size(15, 22);
+            this.buttonSetnputSolPower1.TabIndex = 59;
+            this.buttonSetnputSolPower1.Text = "<";
+            this.buttonSetnputSolPower1.UseVisualStyleBackColor = true;
+            this.buttonSetnputSolPower1.Click += new System.EventHandler(this.buttonSetnputSolPower1_Click);
+            // 
+            // buttonSetnputSolPower2
+            // 
+            this.buttonSetnputSolPower2.Location = new System.Drawing.Point(551, 288);
+            this.buttonSetnputSolPower2.Name = "buttonSetnputSolPower2";
+            this.buttonSetnputSolPower2.Size = new System.Drawing.Size(15, 22);
+            this.buttonSetnputSolPower2.TabIndex = 60;
+            this.buttonSetnputSolPower2.Text = "<";
+            this.buttonSetnputSolPower2.UseVisualStyleBackColor = true;
+            this.buttonSetnputSolPower2.Click += new System.EventHandler(this.buttonSetnputSolPower2_Click);
+            // 
             // Simulator
             // 
             this.ClientSize = new System.Drawing.Size(839, 963);
+            this.Controls.Add(this.buttonSetnputSolPower2);
+            this.Controls.Add(this.buttonSetnputSolPower1);
+            this.Controls.Add(this.MaxGridPower);
+            this.Controls.Add(this.GridVoltageLimit);
+            this.Controls.Add(this.MaxGridPowerSum);
+            this.Controls.Add(this.solarGridVoltage2);
+            this.Controls.Add(this.solarGridVoltage1);
+            this.Controls.Add(this.solarGridPower2);
+            this.Controls.Add(this.solarGridPower1);
+            this.Controls.Add(this.checkBoxSolar2);
+            this.Controls.Add(this.checkBoxSolar1);
+            this.Controls.Add(this.description13);
+            this.Controls.Add(this.setSolarGridPower2);
+            this.Controls.Add(this.setSolarGridPower1);
+            this.Controls.Add(this.label5);
+            this.Controls.Add(this.label4);
             this.Controls.Add(this.description11);
             this.Controls.Add(this.description9);
             this.Controls.Add(this.description10);
-            this.Controls.Add(this.maxGripInput);
             this.Controls.Add(this.description8);
-            this.Controls.Add(this.description7);
+            this.Controls.Add(this.maxPosiibleSolarGridPower);
             this.Controls.Add(this.description5);
             this.Controls.Add(this.grid2MaxPower);
             this.Controls.Add(this.grid1MaxPower);
@@ -494,11 +659,26 @@
         private System.Windows.Forms.Label grid2MaxPower;
         private System.Windows.Forms.Label grid1MaxPower;
         private System.Windows.Forms.Label description5;
-        private System.Windows.Forms.Label description7;
+        private System.Windows.Forms.Label maxPosiibleSolarGridPower;
         private System.Windows.Forms.Label description8;
-        private System.Windows.Forms.Label maxGripInput;
         private System.Windows.Forms.Label description10;
         private System.Windows.Forms.Label description9;
         private System.Windows.Forms.Label description11;
+        private System.Windows.Forms.Label label4;
+        private System.Windows.Forms.Label label5;
+        private System.Windows.Forms.TextBox setSolarGridPower1;
+        private System.Windows.Forms.TextBox setSolarGridPower2;
+        private System.Windows.Forms.Label description13;
+        private System.Windows.Forms.CheckBox checkBoxSolar1;
+        private System.Windows.Forms.CheckBox checkBoxSolar2;
+        private System.Windows.Forms.Label solarGridPower1;
+        private System.Windows.Forms.Label solarGridPower2;
+        private System.Windows.Forms.Label solarGridVoltage2;
+        private System.Windows.Forms.Label solarGridVoltage1;
+        private System.Windows.Forms.Label MaxGridPowerSum;
+        private System.Windows.Forms.Label GridVoltageLimit;
+        private System.Windows.Forms.Label MaxGridPower;
+        private System.Windows.Forms.Button buttonSetnputSolPower1;
+        private System.Windows.Forms.Button buttonSetnputSolPower2;
     }
 }
