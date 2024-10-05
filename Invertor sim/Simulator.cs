@@ -1,12 +1,16 @@
 ﻿using System;
+using System.Drawing.Text;
 using System.IO;
 using System.IO.Ports;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
+using Microsoft.Win32;
 using NModbus;
 using NModbus.Serial;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
@@ -35,11 +39,13 @@ namespace Invertor_sim
         private int MaxPanelCountGrid1 = 0;
         private int MaxPanelCountGrid2 = 0;
 
-        private const int InvertorPowerUsage = 7;//5-7%
-
+        private const int InvertorPowerUsage = 200;
+        private const float Inverter_efficiency = 0.94f;//5-7%
+        private const float Generator_efficiency = 0.9f;
+        private const float invertorWorkPower = 200f;
         private  bool useFileSourse = false;
 
-
+        
 
         private Battery[] batteries = new Battery[]
         {
@@ -64,16 +70,6 @@ namespace Invertor_sim
 
         };
 
-        private enum Error
-        {
-            OverLimit_Error = 0,
-            SolarGridInput_exceeded = 1,
-            Output_power_exceeded = 2,
-            Battery_has_discharged_to_specified_minimum = 3,
-            Infussicient_power_at_generator_input = 4,
-
-        }
-
         public Simulator(MainForm main)
         {
             InitializeComponent();
@@ -83,32 +79,47 @@ namespace Invertor_sim
 
             registers = new InverterRegister[]
             {
-                new InverterRegister(0, 0f, "V", 0, 62, "Battery Voltage"),
-                new InverterRegister(1, 0f, "%", 0, 100, "State of Charge (SOC)"),
-                new InverterRegister(2, 1, "Blocks", 0, 50, "Battery Blocks"),
-                new InverterRegister(3, 0, "Ah", 0, 500, "Nominal Capacity"),
-                new InverterRegister(4, 54, "V", 40, 60, "Max Voltage"),
-                new InverterRegister(5, 42, "V", 40, 60, "Min Voltage"),
-                new InverterRegister(6, 0, "A", 0, 135, "Nominal Charge current"),
-                new InverterRegister(7, 0, "A", 0, 190, "Nominal discharge current"),
-                new InverterRegister(8, 0, "W", 0, 450400, "Max Power Capacity"),
-                new InverterRegister(9, 0, "W", 0, 0, "Battery Power"),
-                new InverterRegister(10, 0, "Text", 0, 22, "OverLimit Error"),
-                new InverterRegister(11, 0, "Error", 0, 10, "Error"),
-                new InverterRegister(12, 0, "W", 0, 16000, "InputGrid Power"),//Мережевий вход
-                new InverterRegister(13, 0, "V", 165, 290, "InputGrid Voltage"),
-                new InverterRegister(14, 0, "W", 0, 16000, "InputGenerator Power"),
-                new InverterRegister(15, 0, "V", 165, 290, "InputGenerator Voltage"),
-                new InverterRegister(16, 0, "W", 0, 7800, "InputSolarPower"),//all solar grid input
-                new InverterRegister(17, 0, "V", 0, 500, "InputSolarGrid1 Voltage"),
-                new InverterRegister(18, 0, "V", 0, 500, "InputSolarGrid2 Voltage"),
-                new InverterRegister(19, 0, "W", 0, 5525, "InputSolarGrid1 Power"),
-                new InverterRegister(20, 0, "W", 0, 5525, "InputSolarGrid2 Power"),
-                new InverterRegister(21, 0, "%", 0, 100, "Minimum Battery discharge"),
-                new InverterRegister(22, 0, "A", 0, 135, "Real Charge current"),
-                new InverterRegister(23, 0, "A", 0, 190, "Real discharge current"),
-                new InverterRegister(24, 0, "V", 125, 425, "MPPT Voltage"),
+                new InverterRegister(0, 0, "V", 0, 62, "Battery Voltage"),//*
+                new InverterRegister(1, 0, "%", 0, 100, "State of Charge (SOC)"),//*
+                new InverterRegister(2, 0, "Blocks", 0, 50, "Battery Blocks"),//*
+                new InverterRegister(3, 0, "Ah", 0, 500, "Battery Currency"),//*
+                new InverterRegister(4, 54, "V", 40, 60, "Max Voltage"),//*
+                new InverterRegister(5, 42, "V", 40, 60, "Min Voltage"),//*
+                new InverterRegister(6, 0, "A", 0, 135, "Nominal Charge current"),//*
+                new InverterRegister(7, 0, "A", 0, 190, "Nominal Discharge current"),//*
+                new InverterRegister(8, 0, "W", 0, 450400, "Max Battery Power Capacity"),//*
+                new InverterRegister(9, 0, "Wh", 0, 0, "Battery Power"),//*
+                new InverterRegister(10, 0, "N", 0, 36, "OverLimit Error"),//*
+                new InverterRegister(11, 0, "Error", 0, 36, "Error"),//*
+                new InverterRegister(12, 0, "W", -16000, 16000, "InputGrid Power"),//Мережевий вход//*
+                new InverterRegister(13, 0, "V", 165, 290, "InputGrid Voltage"),//*
+                new InverterRegister(14, 0, "W", 0, 16000, "InputGenerator Power"),//*
+                new InverterRegister(15, 0, "V", 165, 290, "InputGenerator Voltage"),//*
+                new InverterRegister(16, 0, "W", 0, 7800, "InputSolarPower"),//all solar grid input//*
+                new InverterRegister(17, 0, "V", 0, 500, "InputSolarGrid1 Voltage"),//*
+                new InverterRegister(18, 0, "V", 0, 500, "InputSolarGrid2 Voltage"),//*
+                new InverterRegister(19, 0, "W", 0, 5525, "InputSolarGrid1 Power"),//*
+                new InverterRegister(20, 0, "W", 0, 5525, "InputSolarGrid2 Power"),//*
+                new InverterRegister(21, 20, "%", 0, 100, "Minimum Battery discharge"),//*
+                new InverterRegister(22, 0, "A", 0, 135, "Charge current"),//*
+                new InverterRegister(23, 0, "A", 0, 190, "Discharge current"),//*
+                new InverterRegister(24, 0, "V", 125, 425, "MPPT Voltage"),//*
+                new InverterRegister(25,0,"bool",0,1,"Generator Connected "),//*
+                new InverterRegister(26,0,"kW",0,99999999999,"Sale Power "),//*
+                new InverterRegister(27,0,"V", 165,290,"Grid Voltage Out"),//*
+                new InverterRegister(28,0,"W",0,6000,"Grid Power Out"),//*
+                new InverterRegister(29, 0, "W", 0, 0, "Battery Power Usage"),//*
+                new InverterRegister(30, 0, "bool", 0, 1, "Use Generator For Charge Battery"),//*
+                new InverterRegister(31, 0, "bool", 0, 1, "Use MainsGrid For Charge Battery"),//*
+                new InverterRegister(32, 135, "A", 0, 200, "Max Charge current"),//*
+                new InverterRegister(33, 190, "A", 0, 200, "Max Discharge current"),//*
+                new InverterRegister(34, 100, "%", 0, 100, "Maximum Battery charge"),//*
+                new InverterRegister(35, 100, "%", 0, 100, "Maintaining The Battery Charge Level"),//*
+                new InverterRegister(36, 0, "W", 0, 1, "Low Work Power"),//*
+
+
             };
+
             UpdateRegisterDisplay();
             //timer
             portCheckTimer = new System.Windows.Forms.Timer();
@@ -162,19 +173,28 @@ namespace Invertor_sim
         {
 
             UpdateBatteryInfo();
+            UpdateBatteryFormInfo();
             UpdateGridsPanelCount();
             UpdateGridsPanelMaxPower();
             ShowInvertorInfo();
 
             UpdateGrid1PanelCount();
             UpdateGrid2PanelCount();
+            UpdateUseGeneratorToCharge();
+            UpdateUseMainsGridToCharge();
 
             UpdateSolarGridSumInfo();
             UpdateSolarGridInputInfo();
+            UpdateGridOutStatus();
+            UpdateGeneratorInfo();
+            UpdateMainsGridInfo();
+            UpdateOutGridInfo();
 
-            if(!useFileSourse)
+            CalculatedSellPower();
+            if (!useFileSourse)
             {
                 UpdateVoltageSolarGrid();
+                UpdateWorkStatus();
             }
 
         }
@@ -191,7 +211,7 @@ namespace Invertor_sim
                 labelStatus.Text = "Port Not Selected";
                 return;
             }
-
+            
             if (serialPort != null && serialPort.IsOpen)
             {
                 try
@@ -288,7 +308,11 @@ namespace Invertor_sim
             selectedPanelGrid1 = (SolarPanel)panelTypeGrid1.SelectedItem;
             UpdateSolarGridPanelCount1();
         }
-
+        private void maintainingCharge_ValueChanged(object sender, EventArgs e)
+        {
+            if((float)maintainingCharge.Value >= registers[21].Value && (float)maintainingCharge.Value <= registers[34].Value)
+                registers[35].Value = (float)maintainingCharge.Value;
+        }
         private void PanelTypeGrid2_SelectedIndexChanged(object sender, EventArgs e)
         {
             selectedPanelGrid2 = (SolarPanel)panelTypeGrid2.SelectedItem;
@@ -299,12 +323,11 @@ namespace Invertor_sim
         {
             selectedBattery = (Battery)batteryType.SelectedItem;
             UpdateBatteryRegisters();
-            UpdateMaxPowerCapacity();
         }
         private void numericUpDownBatteryBlocks_ValueChanged(object sender, EventArgs e)
         {
             UpdateBatteryBlockCount((int)batteryElemntCount.Value);
-            UpdateMaxPowerCapacity();
+            UpdateBatteryRegisters();
 
         }
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -330,6 +353,34 @@ namespace Invertor_sim
             currentTime = DateTime.Now; // Synchronize current time
             labelCurrentTime.Text = currentTime.ToString("HH:mm:ss"); // Update time label
         }
+        private void buttonSetGenPower_Click(object sender, EventArgs e)
+        {
+            if (float.TryParse(setGenVoltage.Text, out float gridVoltage))
+            {
+
+                SetGeneratorVoltage(gridVoltage);
+            }
+            if (float.TryParse(setGenPower.Text, out float gridMaxPower))
+            {
+                SetGeneratorMaxPower(gridMaxPower);
+            }
+        }
+
+        private void buttonSetPowerOut_Click(object sender, EventArgs e)
+        {
+            if (float.TryParse(setInvertorPowerOut.Text, out float gridPower))
+            {
+                SetInvertorPowerOut(gridPower);
+            }
+        }
+
+        private void buttonSetMainsPower_Click(object sender, EventArgs e)
+        {
+            if (float.TryParse(setMainsGridVoltaage.Text, out float gridVoltage))
+            {
+                SetMainsGridVoltage(gridVoltage);
+            }
+        }
 
         private void button1_Click(object sender, EventArgs e)
         {
@@ -345,56 +396,159 @@ namespace Invertor_sim
         }
         private void buttonSetnputSolPower1_Click(object sender, EventArgs e)
         {
-            if (int.TryParse(setSolarGridPower1.Text, out int gridPower))
+            if (float.TryParse(setSolarGridPower1.Text, out float gridPower))
             {
-                GetSolarGridPower(gridPower, registers[19], registers[20].Value, registers[16].MaxValue);
+                GetSolarGridPower(gridPower, registers[19], registers[20].Value, registers[16].MaxValue, GetVoltageAndCurrentGrid1(gridPower).Item1);
             }
         }
 
         private void buttonSetnputSolPower2_Click(object sender, EventArgs e)
         {
-            if (int.TryParse(setSolarGridPower2.Text, out int gridPower))
+            if (float.TryParse(setSolarGridPower2.Text, out float gridPower))
             {
-                GetSolarGridPower(gridPower, registers[20], registers[19].Value, registers[16].MaxValue);
+                GetSolarGridPower(gridPower, registers[20], registers[19].Value, registers[16].MaxValue, GetVoltageAndCurrentGrid2(gridPower).Item1);
             }
         }
+        private (float,float) GetVoltageAndCurrentGrid1(float gridPower) {
+
+            return CalculateMPPT(gridPower, PanelCountGrid1, selectedPanelGrid1.MaxWorkСurrent, selectedPanelGrid1.MaxWorkVoltage);
+        }
+        private (float, float) GetVoltageAndCurrentGrid2(float gridPower)
+        {
+
+            return CalculateMPPT(gridPower, PanelCountGrid2, selectedPanelGrid2.MaxWorkСurrent, selectedPanelGrid2.MaxWorkVoltage);
+        }
+
         private void UpdateVoltageSolarGrid()
         {
-            if (int.TryParse(setSolarGridPower1.Text, out int gridPower1))
-            {
-                SetVoltageGrid1(gridPower1);
-            }
-            if (int.TryParse(setSolarGridPower2.Text, out int gridPower2))
-            {
-                SetVoltageGrid2(gridPower2);
-            }
+            registers[17].Value = GetVoltageAndCurrentGrid1(registers[19].Value).Item1;
+            registers[18].Value = GetVoltageAndCurrentGrid2(registers[20].Value).Item1;
         }
-        private void SetVoltageGrid1(int gridPower) {
 
-            registers[17].Value = CalculateMPPT(gridPower, PanelCountGrid1, selectedPanelGrid1.MaxWorkСurrent, selectedPanelGrid1.MaxWorkVoltage).Voltage;
-        }
-        private void SetVoltageGrid2(int gridPower)
-        {
 
-            registers[18].Value = CalculateMPPT(gridPower, PanelCountGrid2, selectedPanelGrid2.MaxWorkСurrent, selectedPanelGrid2.MaxWorkVoltage).Voltage;
-        }
-        private void GetSolarGridPower(int gridPower, InverterRegister solGridPowerRegister, float secondSolGridPowerRegister, float maxSolGridInputSum)
+        private void GetSolarGridPower(float gridPower, InverterRegister solGridPowerRegister, float secondSolGridPowerRegister, float maxSolGridInputSum, float inputVoltage)
         {
             if (gridPower < 0)
                 return;
 
-            UpdateVoltageSolarGrid();
-            if (gridPower > solGridPowerRegister.MaxValue || !SolarGrid1CanGenerate())
+
+            if (gridPower > solGridPowerRegister.MaxValue || !SolarGridCanGenerate(inputVoltage))
             {
                 solGridPowerRegister.Value = 0;
                 return;
             }
-            solGridPowerRegister.Value = (secondSolGridPowerRegister + gridPower <= maxSolGridInputSum)
-            ? gridPower
-            : maxSolGridInputSum - secondSolGridPowerRegister;
+            if ((secondSolGridPowerRegister + gridPower) <= maxSolGridInputSum)
+            {
+                solGridPowerRegister.Value = gridPower;
+            }
+            
         }
 
+        private void UpdateWorkStatus()
+        {
+            if (registers[11].Value != 0)
+            {
+                startSimulation.Checked = false;
+            }
+            if (startSimulation.Checked == true)
+            {
+                SimulatePowerUsage();
+            }
+        }
+        private void UpdateUseGeneratorToCharge()
+        {
+            if(useGenerator.Checked == true)
+            {
+                registers[30].Value = 1;
+            }
+            else
+            {
+                registers[30].Value = 0;
+            }
+        }
+        private void UpdateUseMainsGridToCharge()
+        {
+            if(useMainsGrid.Checked == true)
+            {
+                registers[31].Value = 1;
+            }
+            else
+            {
+                registers[30].Value = 0;
+            }
+        }
+        private void UpdateGridOutStatus()
+        {
 
+            if (haveInvertorOut.Checked && startSimulation.Checked)
+            {
+                SetInvertorVoltageOut(220);
+            }
+            else
+            {
+                SetInvertorPowerOut(0);
+                SetInvertorVoltageOut(0);
+
+            }
+        }
+        private void UpdateSolarGridInputInfo()
+        {
+            if (float.TryParse(setSolarGridPower1.Text, out float solGridPower1))
+            {
+                if (solGridPower1 >= selectedPanelGrid1.MaxWorkVoltage * selectedPanelGrid1.MaxWorkСurrent * PanelCountGrid1)
+                {
+                    possibleGrid1Voltage.Text = "out_of_range";
+                    checkBoxSolar1.Checked = false;
+                    return;
+                }
+                float possibleVoltage1 = CalculateMPPT(solGridPower1, PanelCountGrid1, selectedPanelGrid1.MaxWorkСurrent, selectedPanelGrid1.MaxWorkVoltage).Voltage;
+                possibleGrid1Voltage.Text = possibleVoltage1.ToString();
+
+                if (SolarGridCanGenerate(possibleVoltage1))
+                {
+                    checkBoxSolar1.Checked = true;
+                    solarGridPower1.Text = registers[19].Value.ToString();
+                }
+                else
+                {
+                    checkBoxSolar1.Checked = false;
+                }
+            }
+            if (float.TryParse(setSolarGridPower2.Text, out float solGridPower2))
+            {
+                if (solGridPower2 >= selectedPanelGrid2.MaxWorkVoltage * selectedPanelGrid2.MaxWorkСurrent * PanelCountGrid2)
+                {
+                    possibleGrid2Voltage.Text = "out_of_range";
+                    checkBoxSolar2.Checked = false;
+                    return;
+                }
+                float possibleVoltage2 = CalculateMPPT(solGridPower1, PanelCountGrid2, selectedPanelGrid2.MaxWorkСurrent, selectedPanelGrid2.MaxWorkVoltage).Voltage;
+                possibleGrid2Voltage.Text = possibleVoltage2.ToString();
+
+                if (SolarGridCanGenerate(possibleVoltage2))
+                {
+                    checkBoxSolar2.Checked = true;
+                    solarGridPower2.Text = registers[20].Value.ToString();
+                }
+                else
+                {
+                    checkBoxSolar2.Checked = false;
+                    solarGridPower2.Text = "0";
+                }
+
+            }
+
+            solarGridVoltage1.Text = registers[17].Value.ToString();
+            solarGridVoltage2.Text = registers[18].Value.ToString();
+
+
+
+        }
+        private void buttonClearError_Click(object sender, EventArgs e)
+        {
+            registers[11].Value = 0;
+            label_Error.Text = "Error:";
+        }
         private void buttonConfirmTime_Click(object sender, EventArgs e)
         {
             if (TimeSpan.TryParse(textBoxSetTime.Text, out TimeSpan newTime))
@@ -416,7 +570,38 @@ namespace Invertor_sim
         {
             UpdateGrid2PanelCount();
         }
-        private void checkBoxSolar1_MouseDown(object sender, MouseEventArgs e)
+        private void UpdateBatteryFormInfo()
+        {
+            maxBatteryPowerOut.Text = "Max Battery Power out in moment: " + registers[29].MaxValue;
+            batteryPowerOut.Text = "Battery Power out: " + registers[29].Value;//замена на value
+            SetupBatteryChargeDischargeBoxs();
+            SetupBatteryChargeLvls();
+        }
+        private void SetupBatteryChargeDischargeBoxs()
+        {
+            chargePowerBattery.Maximum = (decimal)registers[6].MaxValue;
+            dischargePowerBatery.Maximum = (decimal)registers[7].MaxValue;
+        }
+        private void SetupBatteryChargeLvls()
+        {
+
+
+            if(minimalCharge.Value < maximumCharge.Value)
+            {
+                registers[34].Value = (float)maximumCharge.Value;
+                registers[21].Value = (float)minimalCharge.Value;
+            }else
+            {
+                maximumCharge.Value = (decimal)registers[34].Value;
+                minimalCharge.Value = (decimal)registers[21].Value;
+            }
+
+            maintainingCharge.Maximum = (decimal)registers[34].Value;
+            maintainingCharge.Minimum = (decimal)registers[21].Value;
+
+
+        }
+            private void checkBoxSolar1_MouseDown(object sender, MouseEventArgs e)
         {
             ((CheckBox)sender).Enabled = false;
             ((CheckBox)sender).Enabled = true;
@@ -430,16 +615,12 @@ namespace Invertor_sim
         private void BatteryPower_Click(object sender, EventArgs e)
         {
             // Проверка корректности введённого значения
-            if (int.TryParse(battaryPowerInput.Text, out int batteryPower))
+            if (int.TryParse(setBatteryCapacity.Text, out int batteryPower))
             {
                 // Если значение корректное, устанавливаем мощность батареи
-                SetBattaryPower(batteryPower);
+                SetBattaryStateOfCharge(batteryPower);
             }
-            else
-            {
-                // Если ввод некорректен, выводим сообщение об ошибке
-                MessageBox.Show("Please enter a valid number for battery power.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+
         }
         //Add data to form
 
@@ -452,43 +633,9 @@ namespace Invertor_sim
                 listBoxBatteryInfo.Items.Add($"{register.Description}: {register.Value} {register.Unit}");
             }
         }
-        private void UpdateSolarGridInputInfo()
+        private bool SolarGridCanGenerate(float gridVoltage)//voltage must be between lowValue and hight value registr MPPT Voltage
         {
-
-            solarGridVoltage1.Text = registers[17].Value.ToString();
-            solarGridVoltage2.Text = registers[18].Value.ToString();
-
-            if (SolarGrid1CanGenerate())
-            {
-                checkBoxSolar1.Checked = true;
-                solarGridPower1.Text = registers[19].Value.ToString();
-            }
-            else
-            {
-                checkBoxSolar1.Checked = false;
-                solarGridPower1.Text = "0";
-            }
-
-            if (SolarGrid2CanGenerate())
-            {
-                checkBoxSolar2.Checked = true;
-                solarGridPower2.Text = registers[20].Value.ToString();
-            }
-            else
-            {
-                checkBoxSolar2.Checked = false;
-                solarGridPower2.Text = "0";
-            }
-
-        }
-
-        private bool SolarGrid1CanGenerate()//voltage must be between lowValue and hight value registr MPPT Voltage
-        {
-            return registers[24].MinValue < registers[17].Value && registers[17].Value <= registers[24].MaxValue;
-        }
-        private bool SolarGrid2CanGenerate()//voltage must be between lowValue and hight value registr MPPT Voltage
-        {
-            return registers[24].MinValue < registers[18].Value && registers[18].Value <= registers[24].MaxValue;
+            return registers[24].MinValue < gridVoltage && gridVoltage <= registers[24].MaxValue;
         }
         private void UpdateSolarGridSumInfo()
         {
@@ -545,39 +692,54 @@ namespace Invertor_sim
                 var error = registers[(int)registers[11].Value];
                 var errorRegis = registers[(int)error.Value];
                 label_Error.Text = "Error " + error.Description + " for " + errorRegis.Description;
+                return;
             }
         }
 
-        private void SetBattaryPower(int value)
+        private void SetBattaryStateOfCharge(int value)
         {
-            registers[9].Value = value;
+            registers[1].Value = value;
         }
 
         //register changes
         private void UpdateBatteryInfo()
         {
-            if (registers[4].Value == registers[5].Value && registers[3].Value != 0 && registers[2].Value != 0)
+            if (registers[4].Value != registers[5].Value &&  registers[2].Value != 0)
             {
-                registers[0].Value = registers[9].Value / registers[3].Value / registers[2].Value;
-                registers[1].Value = (registers[0].Value - registers[5].Value) / (registers[4].Value - registers[5].Value) * 100; // % заряду батареї
+                registers[3].Value = registers[3].MaxValue * registers[1].Value / 100;
+                if (registers[3].MaxValue != 0)
+                    registers[0].Value = CalculateVoltageByMaxMinVoltageAndAh();
+                else
+                    registers[0].Value = 0;
+                registers[29].MaxValue = registers[7].Value * registers[0].Value;
+
+                registers[8].Value = registers[4].Value * registers[3].MaxValue; // Макс запас енергії
+                registers[9].MaxValue = registers[8].Value;
+                registers[9].Value = registers[0].Value * registers[3].Value;
+
             }
             
 
         }
-
-        private void UpdateMaxPowerCapacity()
+        private float CalculateVoltageByMaxMinVoltageAndAh()
         {
-            registers[8].Value = registers[4].Value * registers[2].Value * registers[3].Value; // Макс запас енергії
-            registers[9].MaxValue = registers[8].Value;
+            return registers[5].Value + (registers[4].Value - registers[5].Value) * (registers[3].Value / registers[3].MaxValue);
+        }
+        private float CalculateBatteryCapacityInPercents()
+        {
+            return registers[3].Value / registers[3].MaxValue *100;
         }
         private void UpdateBatteryRegisters()
         {
-            registers[3].Value = selectedBattery.NominalCapacity; // Ємність
+            registers[3].MaxValue = selectedBattery.NominalCapacity * registers[2].Value; // Ємність
             registers[4].Value = selectedBattery.MaxVoltage; // Максимальний вольтаж
             registers[5].Value = selectedBattery.MinVoltage; // Мінімальний вольтаж
-            registers[6].Value = selectedBattery.NominalChargeDischargeCurrent; // Ток заряду/розряду
-            registers[7].Value = selectedBattery.NominalChargeDischargeCurrent;
-            
+
+            var charge = selectedBattery.NominalChargeDischargeCurrent * registers[2].Value;
+            var discharge = selectedBattery.NominalChargeDischargeCurrent * registers[2].Value;
+
+            registers[6].Value = Math.Min(charge, registers[32].Value);// Ток заряду/розряду
+            registers[7].Value = Math.Min(discharge, registers[33].Value);
 
         }
         
@@ -591,7 +753,53 @@ namespace Invertor_sim
         {
             MaxPanelCountGrid2 = UpdateSolarGrid1Data(selectedPanelGrid2, registers[18].MaxValue, registers[24].MaxValue);
         }
-        
+        private void CalculatedSellPower()
+        {
+            if (registers[12].Value < 0)
+            {
+                registers[26].Value += -1 * registers[12].Value;
+            }
+        }
+        private void UpdateGeneratorInfo()
+        {
+            genPowerIn.Text = registers[14].Value.ToString();
+            genVoltage.Text = registers[15].Value.ToString();
+            genMaxPower.Text = registers[14].MaxValue.ToString();
+
+        }
+        private void UpdateMainsGridInfo()
+        {
+            mainsGridVoltage.Text = registers[13].Value.ToString();
+            mainsGridPowerIn.Text = registers[12].Value.ToString();
+        }
+        private void UpdateOutGridInfo()
+        {
+            invertorPowerOut.Text = registers[28].Value.ToString();
+            invertorVoltageOut.Text = registers[27].Value.ToString();
+            maxPowerOut.Text = "MaxPowerOut:" + registers[28].MaxValue.ToString(); 
+            powerSale.Text = "Amount Sold:" + registers[26].Value.ToString();
+        }
+
+        private void UpdateMaxChargeCurrency(float currency)
+        {
+            registers[6].Value = currency;
+            registers[22].MaxValue = currency;
+        }
+
+        private void UpdateMaxDisChargeCurrency(float currency)
+        {
+            registers[7].Value = currency;
+            registers[23].MaxValue = currency;
+        }
+        private void chargePowerBattery_ValueChanged(object sender, EventArgs e)
+        {
+            UpdateMaxChargeCurrency((float)chargePowerBattery.Value);
+        }
+
+        private void dischargePowerBatery_ValueChanged(object sender, EventArgs e)
+        {
+            UpdateMaxDisChargeCurrency((float)dischargePowerBatery.Value);
+        }
         private bool UpdateSolarGrid1PanelCount(NumericUpDown countPanelGrid, int  maxPanelCountGrid, SolarPanel selectedPanelGrid, float maxGridPower, float minGridVoltage, float maxSecondGridPower, float maxSolGridInputSum)
         {
             int formPanelCount = (int)countPanelGrid.Value;
@@ -717,25 +925,391 @@ namespace Invertor_sim
 
         private void FindError()
         {
-            ChрeckRegisterOverLimitError();
+            CheckRegisterOverLimitError();
         }
 
 
-        private void ChрeckRegisterOverLimitError()
+        private void CheckRegisterOverLimitError()
         {
             foreach (var register in registers)
             {
-                if (register.Value > register.MaxValue)
+                if (register.Value > register.MaxValue || register.Value < register.MinValue && register.Value != 0)
                 {
                     register.Value = register.MaxValue;
-                    registers[10].Value = register.RegisterNumber;//Привязать к RegisterNumber
-                    registers[11].Value = registers[10].RegisterNumber;//поиск ошибки OverLimit, если есть, добавление в регистр ошибок, регистр RegisterOverLimitError
+                    SetRegisterErrorOverLimit(register);
                     return;
                 }
             }
 
         }
+        private bool BatteryConnected()
+        {
+            if (registers[0].Value == 0)
+            {
+                return false;
+            }
+            return false;
+        }
+        private void SetOutPowerLowError(float deficitePower)
+        {
+            registers[11].Value = registers[36].RegisterNumber;
+            registers[36].Value = deficitePower;
+
+        }
+        private void SetRegisterErrorOverLimit(InverterRegister register)//поиск ошибки OverLimit, если есть, добавление в регистр ошибок, регистр RegisterOverLimitError
+        {
+            registers[10].Value = register.RegisterNumber;//Привязать к RegisterNumber
+            registers[11].Value = registers[10].RegisterNumber;
+        }
+
+
+        //generation
+
+        private void SetGeneratorMaxPower(float power)
+        {
+            if (power > 0)
+            {
+                registers[14].MaxValue = power;
+                registers[25].Value = 1;
+            }
+            else
+            {
+                registers[14].MaxValue = 0;
+                registers[25].Value = 0;
+            }
+
+        }
+        private void SetGeneratorPower(float power)
+        {
+
+            if (registers[25].Value == 1 && registers[15].Value > 0)
+            {
+                if (registers[14].MaxValue > power)
+                {
+                    registers[14].Value = power;
+                }
+                else
+                {
+                    registers[14].Value = registers[14].MaxValue;
+                }
+            }
+            
+        }
+        private void GeneratorStart()
+        {
+            if (registers[14].MaxValue > 0 )
+                SetGeneratorVoltage(220);
+        }
 
         
+        
+        private void SetMainsGridPower(float power)
+        {
+            if (registers[13].Value > 0)
+            {
+                if (registers[12].MaxValue > power)
+                    registers[12].Value = power;
+                else
+                    registers[12].Value = registers[12].MaxValue;
+
+            }
+            else
+            {
+                registers[12].Value = 0;
+            }
+
+        }
+
+        private void SetInvertorPowerOut(float power)
+        {
+            if(registers[27].Value > 0)
+                registers[28].Value = power;
+
+        }
+        private void SetGeneratorVoltage(float voltage)
+        {
+            if(voltage == 0)
+            {
+                SetGeneratorPower(0);
+                registers[15].Value = voltage;
+                return;
+            }
+
+            if (registers[15].MaxValue >= voltage && voltage >= registers[15].MinValue)
+            {
+                registers[15].Value = voltage;
+            }
+            else
+            {
+                SetRegisterErrorOverLimit(registers[15]);
+                SetGeneratorPower(0);
+                registers[15].Value = 0;
+            }
+        }
+        private void SetMainsGridVoltage(float voltage)
+        {
+            if (voltage == 0)
+            {
+                SetMainsGridPower(0);
+                registers[13].Value = voltage;
+                return;
+            }
+            if (registers[13].MaxValue >= voltage && voltage >= registers[13].MinValue)
+            {
+                registers[13].Value = voltage;
+
+            }
+            else
+            {
+                SetRegisterErrorOverLimit(registers[15]);
+                SetMainsGridPower(0);
+                registers[13].Value = 0;
+            }
+        }
+        private void SetInvertorVoltageOut(float voltage)//220/230
+        {
+            if (voltage == 0)
+            {
+                SetInvertorPowerOut(0);
+                registers[27].Value = voltage;
+                return;
+            }
+            if (registers[27].MaxValue >= voltage && voltage >= registers[27].MinValue)
+            {
+                registers[27].Value = voltage;
+            }
+            else
+            {
+                SetRegisterErrorOverLimit(registers[27]);
+                SetInvertorPowerOut(0);
+                registers[27].Value = 0;
+
+            }
+        }
+
+
+        ////simulator
+        ///
+
+
+        private float DischargeBattery(float dischargeI)
+        {
+            dischargeI = Math.Min(registers[7].Value, dischargeI / Inverter_efficiency);
+            registers[23].Value = dischargeI;
+
+            float batteryCharge = registers[3].Value;
+            float dischargeIa = dischargeI / 3600f;
+            float setBattarycharge = Math.Max(registers[3].MaxValue * registers[35].Value / 100f, registers[3].Value - dischargeIa);
+
+            registers[3].Value = setBattarycharge;
+
+            registers[0].Value = CalculateVoltageByMaxMinVoltageAndAh();
+
+            registers[1].Value = CalculateBatteryCapacityInPercents();
+
+            return (batteryCharge - setBattarycharge) * Inverter_efficiency * 3600f + 0.1f;
+        }
+        private float ChargeBattery(float chargeI)
+        {
+            chargeI = Math.Min(registers[6].Value, chargeI);
+            registers[22].Value = chargeI;
+
+            float batteryCharge = registers[3].Value;
+            float chargeIa = chargeI / 3600f ;
+            float setBattarycharge = Math.Min((chargeIa * Inverter_efficiency + registers[3].Value) * Inverter_efficiency, registers[3].MaxValue * registers[35].Value / 100f);
+            registers[3].Value = setBattarycharge;
+
+
+            registers[0].Value = CalculateVoltageByMaxMinVoltageAndAh();
+
+            registers[1].Value = CalculateBatteryCapacityInPercents();
+            return (setBattarycharge / batteryCharge - batteryCharge)  * 3600f + 0.1f;
+
+        }
+        private void SetSimulatePowerUsageParametersToZero()
+        {
+            registers[23].Value = 0f;
+            registers[22].Value = 0f;
+            SetGeneratorPower(0);
+            SetMainsGridPower(0);
+        }
+        private float FindIForBatteryCharge()
+        {
+            float neededIa = registers[3].MaxValue * registers[35].Value / 100 - registers[3].Value;//доводимо батарею до заданого рівня
+            float deltaIa = Math.Min(registers[6].Value / 3600, neededIa);
+            return deltaIa * 3600;
+        }
+
+        private void SimulatePowerUsage()
+        {
+            SetSimulatePowerUsageParametersToZero();
+            float invertorWokrP = invertorWorkPower + registers[28].Value;
+            
+            if (!BatteryConnected())
+            {
+                if (registers[13].Value > 0)
+                {
+                    SetMainsGridPower(invertorWokrP);
+
+                    invertorWokrP -= registers[12].Value;
+                }
+                if (registers[25].Value == 1)
+                {
+                    if (registers[15].Value == 0)
+                        GeneratorStart();
+
+                    SetGeneratorPower(invertorWokrP);
+
+                    invertorWokrP -= registers[14].Value;
+
+                }
+                if(invertorWokrP > 0)
+                    SetOutPowerLowError(invertorWokrP);
+
+
+                return;
+            }
+
+                
+            float invertorI = invertorWokrP / registers[0].Value;
+            
+            if (registers[28].Value <= registers[16].Value)
+            {//використовуємо сонячні панелі
+                float solarPowerAvailble = registers[16].Value - registers[28].Value;
+
+                if (registers[1].Value >= registers[35].Value)
+                {//використовуємо сонячні панелі для продажу
+                    registers[26].Value += solarPowerAvailble / 1000;
+                }
+                else
+                {//використовуємо сонячні панелі для зарядки
+                    float chargeI = solarPowerAvailble / registers[0].Value;
+
+                    float deltaI = FindIForBatteryCharge();
+
+                    if (chargeI >= deltaI)
+                    {
+                        
+
+                        chargeI -= ChargeBattery(deltaI); ;
+
+                        if (chargeI > 0)
+                        {//використовуємо сонячні панелі для зарядки і продажу
+                            solarPowerAvailble = chargeI * registers[0].Value;//не знаю на який вольтаж множити
+
+                            registers[26].Value += solarPowerAvailble / 1000;//перевірити часовий проміжок генерації
+                        }
+                    }
+                if(registers[1].Value < registers[35].Value)
+                {//якщо не вистачає потужності для заряду
+                    float deficiteI = (deltaI - chargeI);
+                    float deficiteP = deficiteI * registers[0].Value;
+
+                    if (registers[31].Value == 1)
+                    {
+                        SetMainsGridPower(deficiteP);
+
+                        ChargeBattery(registers[12].Value / registers[0].Value + chargeI);
+                    }
+                    else if (registers[30].Value == 1)
+                    {
+                        if (registers[15].Value == 0)
+                            GeneratorStart();
+
+                        SetGeneratorPower(deficiteP);
+                        ChargeBattery(registers[14].Value / registers[0].Value + chargeI);
+                    }
+                    else
+                    {
+                        ChargeBattery(chargeI);
+                    }
+
+                }
+                }
+            }
+            else
+            {
+                float deficiteP = registers[28].Value - registers[16].Value;
+
+                if (registers[1].Value > registers[35].Value)
+                {// використовуємо сонячні панелі + батареї
+
+
+                    float workVoltage = registers[0].Value;
+                    deficiteP -= DischargeBattery(Math.Min(deficiteP / registers[0].Value, registers[7].Value)) * workVoltage;
+
+                    if (deficiteP > 0)
+                    {
+                        if (registers[31].Value == 1)
+                        {
+                            SetMainsGridPower(deficiteP);
+                            deficiteP -= registers[12].Value;
+                        }
+                        if (registers[30].Value == 1)
+                        {
+                            if (registers[15].Value == 0)
+                                GeneratorStart();
+
+                            SetGeneratorPower(deficiteP);
+
+                            deficiteP -= registers[14].Value;
+
+
+                        }
+                        if (deficiteP > 0)
+                        {
+                            SetOutPowerLowError(deficiteP);
+                        }
+                    }
+                }
+                else
+                {
+                    float deltaI = FindIForBatteryCharge();
+
+                    if (registers[13].Value > 0)
+                    {
+                        SetMainsGridPower(deficiteP);
+
+                        deficiteP -= registers[12].Value;
+                    }
+                    if (registers[25].Value == 1)
+                    {
+                        if (registers[15].Value == 0)
+                            GeneratorStart();
+
+                        SetGeneratorPower(deficiteP);
+
+                        deficiteP -= registers[14].Value;
+
+                    }
+                    if (deficiteP == 0)
+                    {
+                        if (registers[31].Value == 1 && registers[13].Value > 0 && deltaI > 0)
+                        {
+                            float bufferI = (registers[12].MaxValue - registers[12].Value) / registers[0].Value;
+                            float charge = Math.Min(bufferI, deltaI);
+                            SetMainsGridPower(charge * registers[0].Value + registers[12].Value);
+                            
+                            deltaI -= ChargeBattery(charge); ;
+                        }
+
+                        if (registers[25].Value == 1 && registers[30].Value == 1 && deltaI > 0)
+                        {
+                            if (registers[15].Value == 0)
+                                GeneratorStart();
+                            float bufferI = (registers[14].MaxValue - registers[14].Value) / registers[0].Value;
+                            float charge = Math.Min(bufferI, deltaI);
+                            
+                            SetGeneratorPower(ChargeBattery(charge) * registers[0].Value + registers[14].Value);
+
+                        }
+                    }
+                    else
+                    {
+                        SetOutPowerLowError(deficiteP);
+                    }
+                }
+            }
+        }
     }
 }
