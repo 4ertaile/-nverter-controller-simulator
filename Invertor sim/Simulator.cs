@@ -1,8 +1,10 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Drawing.Text;
 using System.IO;
 using System.IO.Ports;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
@@ -45,7 +47,7 @@ namespace Invertor_sim
         private const float invertorWorkPower = 200f;
         private  bool useFileSourse = false;
 
-        
+       
 
         private Battery[] batteries = new Battery[]
         {
@@ -70,6 +72,20 @@ namespace Invertor_sim
 
         };
 
+        public enum UnitEnum
+        {
+            V,    // Вольти
+            A,    // Ампери
+            W,    // Ватти
+            Wh,   // Ват-години
+            Ah,   // Ампер-години
+            Blocks,  // Блоки
+            N,    // Кількість
+            Error, // Помилки
+            Percent // Відсотки
+        }
+
+
         public Simulator(MainForm main)
         {
             InitializeComponent();
@@ -77,48 +93,44 @@ namespace Invertor_sim
 
             modbusFactory = new ModbusFactory();
 
-            registers = new InverterRegister[]
-            {
-                new InverterRegister(0, 0, "V", 0, 62, "Battery Voltage"),//*
-                new InverterRegister(1, 0, "%", 0, 100, "State of Charge (SOC)"),//*
-                new InverterRegister(2, 0, "Blocks", 0, 50, "Battery Blocks"),//*
-                new InverterRegister(3, 0, "Ah", 0, 500, "Battery Currency"),//*
-                new InverterRegister(4, 54, "V", 40, 60, "Max Voltage"),//*
-                new InverterRegister(5, 42, "V", 40, 60, "Min Voltage"),//*
-                new InverterRegister(6, 0, "A", 0, 135, "Nominal Charge current"),//*
-                new InverterRegister(7, 0, "A", 0, 190, "Nominal Discharge current"),//*
-                new InverterRegister(8, 0, "W", 0, 450400, "Max Battery Power Capacity"),//*
-                new InverterRegister(9, 0, "Wh", 0, 0, "Battery Power"),//*
-                new InverterRegister(10, 0, "N", 0, 36, "OverLimit Error"),//*
-                new InverterRegister(11, 0, "Error", 0, 36, "Error"),//*
-                new InverterRegister(12, 0, "W", -16000, 16000, "InputGrid Power"),//Мережевий вход//*
-                new InverterRegister(13, 0, "V", 165, 290, "InputGrid Voltage"),//*
-                new InverterRegister(14, 0, "W", 0, 16000, "InputGenerator Power"),//*
-                new InverterRegister(15, 0, "V", 165, 290, "InputGenerator Voltage"),//*
-                new InverterRegister(16, 0, "W", 0, 7800, "InputSolarPower"),//all solar grid input//*
-                new InverterRegister(17, 0, "V", 0, 500, "InputSolarGrid1 Voltage"),//*
-                new InverterRegister(18, 0, "V", 0, 500, "InputSolarGrid2 Voltage"),//*
-                new InverterRegister(19, 0, "W", 0, 5525, "InputSolarGrid1 Power"),//*
-                new InverterRegister(20, 0, "W", 0, 5525, "InputSolarGrid2 Power"),//*
-                new InverterRegister(21, 20, "%", 0, 100, "Minimum Battery discharge"),//*
-                new InverterRegister(22, 0, "A", 0, 135, "Charge current"),//*
-                new InverterRegister(23, 0, "A", 0, 190, "Discharge current"),//*
-                new InverterRegister(24, 0, "V", 125, 425, "MPPT Voltage"),//*
-                new InverterRegister(25,0,"bool",0,1,"Generator Connected "),//*
-                new InverterRegister(26,0,"kW",0,99999999999,"Sale Power "),//*
-                new InverterRegister(27,0,"V", 165,290,"Grid Voltage Out"),//*
-                new InverterRegister(28,0,"W",0,6000,"Grid Power Out"),//*
-                new InverterRegister(29, 0, "W", 0, 0, "Battery Power Usage"),//*
-                new InverterRegister(30, 0, "bool", 0, 1, "Use Generator For Charge Battery"),//*
-                new InverterRegister(31, 0, "bool", 0, 1, "Use MainsGrid For Charge Battery"),//*
-                new InverterRegister(32, 135, "A", 0, 200, "Max Charge current"),//*
-                new InverterRegister(33, 190, "A", 0, 200, "Max Discharge current"),//*
-                new InverterRegister(34, 100, "%", 0, 100, "Maximum Battery charge"),//*
-                new InverterRegister(35, 100, "%", 0, 100, "Maintaining The Battery Charge Level"),//*
-                new InverterRegister(36, 0, "W", 0, 1, "Low Work Power"),//*
-
-
-            };
+            registers = new InverterRegister[Enum.GetValues(typeof(RegisterEnum)).Length];
+            registers[(int)RegisterEnum.BatteryVoltage] = new InverterRegister(RegisterEnum.BatteryVoltage, 0, UnitEnum.V.ToString(), 0, 62);//*
+            registers[(int)RegisterEnum.StateOfCharge] = new InverterRegister(RegisterEnum.StateOfCharge, 0, UnitEnum.Percent.ToString(), 0, 100);//*
+            registers[(int)RegisterEnum.BatteryBlocks] = new InverterRegister(RegisterEnum.BatteryBlocks, 0, UnitEnum.Blocks.ToString(), 0, 50);
+            registers[(int)RegisterEnum.BatteryCurrency] = new InverterRegister(RegisterEnum.BatteryCurrency, 0, UnitEnum.Ah.ToString(), 0, 500);
+            registers[(int)RegisterEnum.MaxVoltage] = new InverterRegister(RegisterEnum.MaxVoltage, 54, UnitEnum.V.ToString(), 40, 60);
+            registers[(int)RegisterEnum.MinVoltage] = new InverterRegister(RegisterEnum.MinVoltage, 42, UnitEnum.V.ToString(), 40, 60);
+            registers[(int)RegisterEnum.NominalChargeCurrent] = new InverterRegister(RegisterEnum.NominalChargeCurrent, 0, UnitEnum.A.ToString(), 0, 135);
+            registers[(int)RegisterEnum.NominalDischargeCurrent] = new InverterRegister(RegisterEnum.NominalDischargeCurrent, 0, UnitEnum.A.ToString(), 0, 190);
+            registers[(int)RegisterEnum.MaxBatteryPowerCapacity] = new InverterRegister(RegisterEnum.MaxBatteryPowerCapacity, 0, UnitEnum.W.ToString(), 0, 450400);
+            registers[(int)RegisterEnum.BatteryPower] = new InverterRegister(RegisterEnum.BatteryPower, 0, UnitEnum.Wh.ToString(), 0, 0);
+            registers[(int)RegisterEnum.OverLimitError] = new InverterRegister(RegisterEnum.OverLimitError, 0, UnitEnum.N.ToString(), 0, 36);
+            registers[(int)RegisterEnum.Error] = new InverterRegister(RegisterEnum.Error, 0, UnitEnum.Error.ToString(), 0, 36);
+            registers[(int)RegisterEnum.InputGridPower] = new InverterRegister(RegisterEnum.InputGridPower, 0, UnitEnum.W.ToString(), -16000, 16000); // Мережевий вхід
+            registers[(int)RegisterEnum.InputGridVoltage] = new InverterRegister(RegisterEnum.InputGridVoltage, 0, UnitEnum.V.ToString(), 165, 290);
+            registers[(int)RegisterEnum.InputGeneratorPower] = new InverterRegister(RegisterEnum.InputGeneratorPower, 0, UnitEnum.W.ToString(), 0, 0);
+            registers[(int)RegisterEnum.InputGeneratorVoltage] = new InverterRegister(RegisterEnum.InputGeneratorVoltage, 0, UnitEnum.V.ToString(), 165, 290);
+            registers[(int)RegisterEnum.InputSolarPower] = new InverterRegister(RegisterEnum.InputSolarPower, 0, UnitEnum.W.ToString(), 0, 7800); // Весь сонячний вхід
+            registers[(int)RegisterEnum.InputSolarGrid1Voltage] = new InverterRegister(RegisterEnum.InputSolarGrid1Voltage, 0, UnitEnum.V.ToString(), 0, 500);
+            registers[(int)RegisterEnum.InputSolarGrid2Voltage] = new InverterRegister(RegisterEnum.InputSolarGrid2Voltage, 0, UnitEnum.V.ToString(), 0, 500);
+            registers[(int)RegisterEnum.InputSolarGrid1Power] = new InverterRegister(RegisterEnum.InputSolarGrid1Power, 0, UnitEnum.W.ToString(), 0, 5525);
+            registers[(int)RegisterEnum.InputSolarGrid2Power] = new InverterRegister(RegisterEnum.InputSolarGrid2Power, 0, UnitEnum.W.ToString(), 0, 5525);
+            registers[(int)RegisterEnum.MinimumBatteryDischarge] = new InverterRegister(RegisterEnum.MinimumBatteryDischarge, 20, UnitEnum.Percent.ToString(), 0, 100);
+            registers[(int)RegisterEnum.ChargeCurrent] = new InverterRegister(RegisterEnum.ChargeCurrent, 0, UnitEnum.A.ToString(), 0, 135);
+            registers[(int)RegisterEnum.DischargeCurrent] = new InverterRegister(RegisterEnum.DischargeCurrent, 0, UnitEnum.A.ToString(), 0, 190);
+            registers[(int)RegisterEnum.MPPTVoltage] = new InverterRegister(RegisterEnum.MPPTVoltage, 0, UnitEnum.V.ToString(), 125, 425);
+            registers[(int)RegisterEnum.GeneratorConnected] = new InverterRegister(RegisterEnum.GeneratorConnected, 0, UnitEnum.Error.ToString(), 0, 1);
+            registers[(int)RegisterEnum.SalePower] = new InverterRegister(RegisterEnum.SalePower, 0, UnitEnum.W.ToString(), 0, 99999999999); 
+            registers[(int)RegisterEnum.GridVoltageOut] = new InverterRegister(RegisterEnum.GridVoltageOut, 0, UnitEnum.V.ToString(), 165, 290);
+            registers[(int)RegisterEnum.GridPowerOut] = new InverterRegister(RegisterEnum.GridPowerOut, 0, UnitEnum.W.ToString(), 0, 6000);
+            registers[(int)RegisterEnum.BatteryPowerUsage] = new InverterRegister(RegisterEnum.BatteryPowerUsage, 0, UnitEnum.W.ToString(), 0, 0);
+            registers[(int)RegisterEnum.UseGeneratorForChargeBattery] = new InverterRegister(RegisterEnum.UseGeneratorForChargeBattery, 0, UnitEnum.Error.ToString(), 0, 1);
+            registers[(int)RegisterEnum.UseMainsGridForChargeBattery] = new InverterRegister(RegisterEnum.UseMainsGridForChargeBattery, 0, UnitEnum.Error.ToString(), 0, 1);
+            registers[(int)RegisterEnum.MaxChargeCurrent] = new InverterRegister(RegisterEnum.MaxChargeCurrent, 135, UnitEnum.A.ToString(), 0, 200);
+            registers[(int)RegisterEnum.MaxDischargeCurrent] = new InverterRegister(RegisterEnum.MaxDischargeCurrent, 190, UnitEnum.A.ToString(), 0, 200);
+            registers[(int)RegisterEnum.MaximumBatteryCharge] = new InverterRegister(RegisterEnum.MaximumBatteryCharge, 100, UnitEnum.Percent.ToString(), 0, 100);
+            registers[(int)RegisterEnum.MaintainingBatteryChargeLevel] = new InverterRegister(RegisterEnum.MaintainingBatteryChargeLevel, 100, UnitEnum.Percent.ToString(), 0, 100);
+            registers[(int)RegisterEnum.LowWorkPower] = new InverterRegister(RegisterEnum.LowWorkPower, 0, UnitEnum.W.ToString(), 0, 1);
 
             UpdateRegisterDisplay();
             //timer
@@ -155,7 +167,8 @@ namespace Invertor_sim
 
         }
 
-        
+       
+
         private void ClockTimer_Tick(object sender, EventArgs e)
         {
             currentTime = currentTime.AddSeconds(1); // Increment current time by one second
@@ -474,7 +487,7 @@ namespace Invertor_sim
             }
             else
             {
-                registers[30].Value = 0;
+                registers[31].Value = 0;
             }
         }
         private void UpdateGridOutStatus()
@@ -738,8 +751,8 @@ namespace Invertor_sim
             var charge = selectedBattery.NominalChargeDischargeCurrent * registers[2].Value;
             var discharge = selectedBattery.NominalChargeDischargeCurrent * registers[2].Value;
 
-            registers[6].Value = Math.Min(charge, registers[32].Value);// Ток заряду/розряду
-            registers[7].Value = Math.Min(discharge, registers[33].Value);
+            registers[6].MaxValue = Math.Min(charge, registers[32].Value);// Ток заряду/розряду
+            registers[7].MaxValue = Math.Min(discharge, registers[33].Value);
 
         }
         
@@ -948,7 +961,7 @@ namespace Invertor_sim
             {
                 return false;
             }
-            return false;
+            return true;
         }
         private void SetOutPowerLowError(float deficitePower)
         {
@@ -1092,14 +1105,15 @@ namespace Invertor_sim
         ///
 
 
-        private float DischargeBattery(float dischargeI)
+        private float DischargeBattery(float dischargeI, InverterRegister dischargeLimit)
         {
-            dischargeI = Math.Min(registers[7].Value, dischargeI / Inverter_efficiency);
-            registers[23].Value = dischargeI;
+            float dischargeCur = registers[23].Value;
+            registers[23].Value = Math.Min(registers[7].Value - registers[23].Value, dischargeI / Inverter_efficiency);
+            dischargeI = registers[23].Value - dischargeCur;
 
             float batteryCharge = registers[3].Value;
             float dischargeIa = dischargeI / 3600f;
-            float setBattarycharge = Math.Max(registers[3].MaxValue * registers[35].Value / 100f, registers[3].Value - dischargeIa);
+            float setBattarycharge = Math.Max(registers[3].MaxValue * dischargeLimit.Value / 100f, registers[3].Value - dischargeIa);
 
             registers[3].Value = setBattarycharge;
 
@@ -1109,21 +1123,22 @@ namespace Invertor_sim
 
             return (batteryCharge - setBattarycharge) * Inverter_efficiency * 3600f + 0.1f;
         }
-        private float ChargeBattery(float chargeI)
+        private float ChargeBattery(float chargeI, InverterRegister chargeLimit)
         {
-            chargeI = Math.Min(registers[6].Value, chargeI);
-            registers[22].Value = chargeI;
+            float chargeCur = registers[23].Value;
+            registers[22].Value += Math.Min(registers[6].Value - registers[22].Value, chargeI);
+            chargeI = registers[22].Value - chargeCur;
 
             float batteryCharge = registers[3].Value;
             float chargeIa = chargeI / 3600f ;
-            float setBattarycharge = Math.Min((chargeIa * Inverter_efficiency + registers[3].Value) * Inverter_efficiency, registers[3].MaxValue * registers[35].Value / 100f);
+            float setBattarycharge = Math.Min((chargeIa * Inverter_efficiency + registers[3].Value), registers[3].MaxValue * chargeLimit.Value / 100f);
             registers[3].Value = setBattarycharge;
 
 
             registers[0].Value = CalculateVoltageByMaxMinVoltageAndAh();
 
             registers[1].Value = CalculateBatteryCapacityInPercents();
-            return (setBattarycharge / batteryCharge - batteryCharge)  * 3600f + 0.1f;
+            return (setBattarycharge - batteryCharge) / Inverter_efficiency * 3600f + 0.1f;
 
         }
         private void SetSimulatePowerUsageParametersToZero()
@@ -1169,13 +1184,10 @@ namespace Invertor_sim
 
                 return;
             }
-
-                
-            float invertorI = invertorWokrP / registers[0].Value;
             
-            if (registers[28].Value <= registers[16].Value)
+            if (invertorWokrP <= registers[16].Value)
             {//використовуємо сонячні панелі
-                float solarPowerAvailble = registers[16].Value - registers[28].Value;
+                float solarPowerAvailble = registers[16].Value - invertorWokrP;
 
                 if (registers[1].Value >= registers[35].Value)
                 {//використовуємо сонячні панелі для продажу
@@ -1191,7 +1203,7 @@ namespace Invertor_sim
                     {
                         
 
-                        chargeI -= ChargeBattery(deltaI); ;
+                        chargeI -= ChargeBattery(deltaI, registers[35]); 
 
                         if (chargeI > 0)
                         {//використовуємо сонячні панелі для зарядки і продажу
@@ -1209,7 +1221,7 @@ namespace Invertor_sim
                     {
                         SetMainsGridPower(deficiteP);
 
-                        ChargeBattery(registers[12].Value / registers[0].Value + chargeI);
+                        ChargeBattery(registers[12].Value / registers[0].Value + chargeI, registers[35]);
                     }
                     else if (registers[30].Value == 1)
                     {
@@ -1217,11 +1229,11 @@ namespace Invertor_sim
                             GeneratorStart();
 
                         SetGeneratorPower(deficiteP);
-                        ChargeBattery(registers[14].Value / registers[0].Value + chargeI);
+                        ChargeBattery(registers[14].Value / registers[0].Value + chargeI, registers[35]);
                     }
                     else
                     {
-                        ChargeBattery(chargeI);
+                        ChargeBattery(chargeI, registers[35]);
                     }
 
                 }
@@ -1229,37 +1241,94 @@ namespace Invertor_sim
             }
             else
             {
-                float deficiteP = registers[28].Value - registers[16].Value;
+                float deficiteP = invertorWokrP - registers[16].Value;
 
-                if (registers[1].Value > registers[35].Value)
+                if (registers[1].Value > registers[21].Value)
                 {// використовуємо сонячні панелі + батареї
 
-
-                    float workVoltage = registers[0].Value;
-                    deficiteP -= DischargeBattery(Math.Min(deficiteP / registers[0].Value, registers[7].Value)) * workVoltage;
-
-                    if (deficiteP > 0)
+                    if (registers[1].Value > registers[35].Value)
                     {
-                        if (registers[31].Value == 1)
-                        {
-                            SetMainsGridPower(deficiteP);
-                            deficiteP -= registers[12].Value;
-                        }
-                        if (registers[30].Value == 1)
-                        {
-                            if (registers[15].Value == 0)
-                                GeneratorStart();
+                          float workVoltage = registers[0].Value;
+                        deficiteP -= DischargeBattery(Math.Min(deficiteP / registers[0].Value, registers[7].Value), registers[21]) * workVoltage;
 
-                            SetGeneratorPower(deficiteP);
-
-                            deficiteP -= registers[14].Value;
-
-
-                        }
                         if (deficiteP > 0)
+                        {
+                            if (registers[31].Value == 1)
+                            {
+                                SetMainsGridPower(deficiteP);
+                                deficiteP -= registers[12].Value;
+                            }
+                            if (registers[30].Value == 1)
+                            {
+                                if (registers[15].Value == 0)
+                                    GeneratorStart();
+
+                                SetGeneratorPower(deficiteP);
+
+                                deficiteP -= registers[14].Value;
+
+
+                            }
+                            if (deficiteP > 0)
+                            {
+                                SetOutPowerLowError(deficiteP);
+                            }
+                        }
+                    }
+                    else
+                    {
+                       if (registers[13].Value > 0)
+                    {
+                        SetMainsGridPower(deficiteP);
+
+                        deficiteP -= registers[12].Value;
+                    }
+                    if (registers[25].Value == 1)
+                    {
+                        if (registers[15].Value == 0)
+                            GeneratorStart();
+
+                        SetGeneratorPower(deficiteP);
+
+                        deficiteP -= registers[14].Value;
+
+                    }
+                        if (deficiteP > 0)
+                        {
+                            float workVoltage = registers[0].Value;
+                            deficiteP -= DischargeBattery(Math.Min(deficiteP / registers[0].Value, registers[7].Value), registers[21]) * workVoltage;
+                        }else
+                        {
+                            float deltaI = FindIForBatteryCharge();
+
+                            if (registers[31].Value == 1 && registers[13].Value > 0 && deltaI > 0)
+                            {
+                                float bufferI = (registers[12].MaxValue - registers[12].Value) / registers[0].Value;
+                                float charge = Math.Min(bufferI, deltaI);
+                                SetMainsGridPower(charge * registers[0].Value + registers[12].Value);
+
+                                deltaI -= ChargeBattery(charge, registers[35]);
+                            }
+
+                            if (registers[25].Value == 1 && registers[30].Value == 1 && deltaI > 0)
+                            {
+                                if (registers[15].Value == 0)
+                                    GeneratorStart();
+                                float bufferI = (registers[14].MaxValue - registers[14].Value) / registers[0].Value;
+                                float charge = Math.Min(bufferI, deltaI);
+
+                                SetGeneratorPower(ChargeBattery(charge, registers[35]) * registers[0].Value + registers[14].Value);
+
+                            }
+                            
+
+                        }
+                        if(deficiteP > 0)
                         {
                             SetOutPowerLowError(deficiteP);
                         }
+
+
                     }
                 }
                 else
@@ -1290,7 +1359,7 @@ namespace Invertor_sim
                             float charge = Math.Min(bufferI, deltaI);
                             SetMainsGridPower(charge * registers[0].Value + registers[12].Value);
                             
-                            deltaI -= ChargeBattery(charge); ;
+                            deltaI -= ChargeBattery(charge, registers[35]);
                         }
 
                         if (registers[25].Value == 1 && registers[30].Value == 1 && deltaI > 0)
@@ -1300,7 +1369,7 @@ namespace Invertor_sim
                             float bufferI = (registers[14].MaxValue - registers[14].Value) / registers[0].Value;
                             float charge = Math.Min(bufferI, deltaI);
                             
-                            SetGeneratorPower(ChargeBattery(charge) * registers[0].Value + registers[14].Value);
+                            SetGeneratorPower(ChargeBattery(charge, registers[35]) * registers[0].Value + registers[14].Value);
 
                         }
                     }

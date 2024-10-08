@@ -99,6 +99,7 @@
     <Compile Include="Parameter.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RegisterEnum.cs" />
     <Compile Include="Simulator.cs">
       <SubType>Form</SubType>
     </Compile>
