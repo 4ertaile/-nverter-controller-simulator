@@ -1,21 +1,18 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using NModbus;
+using NModbus.Serial;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
-using System.Drawing.Text;
 using System.IO;
 using System.IO.Ports;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Security.AccessControl;
-using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Windows.Forms.DataVisualization.Charting;
-using Microsoft.Win32;
-using NModbus;
-using NModbus.Serial;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace Invertor_sim
 {
@@ -28,7 +25,7 @@ namespace Invertor_sim
         private string[] previousPorts;
         private IModbusSerialMaster modbusMaster;
         private IModbusFactory modbusFactory;
-        private InverterRegister[] registers;
+        private static InverterRegister[] registers;
         private DateTime currentTime;
         private Battery selectedBattery;
 
@@ -45,9 +42,12 @@ namespace Invertor_sim
         private const float Inverter_efficiency = 0.94f;//5-7%
         private const float Generator_efficiency = 0.9f;
         private const float invertorWorkPower = 200f;
-        private  bool useFileSourse = false;
-
-       
+        private bool useFileSourse = false;
+        private static string recivetmess = "";
+        //modbus
+        private static SlaveStorage storage;
+        private static CancellationTokenSource cts = new CancellationTokenSource();
+        private Task listenTask;
 
         private Battery[] batteries = new Battery[]
         {
@@ -61,7 +61,7 @@ namespace Invertor_sim
             new SolarPanel("ANDO QN-550HT", 50.03f,12.99f, 42.34f),
             new SolarPanel("RISEN 400W RSM40-8-400M", 41.3f,11.64f, 34.39f),
             new SolarPanel("V-TAC AU410-27V-MH", 37.45f,13.04f, 31.46f),
-            
+
         };
         private SolarPanel[] solarPanels2 = new SolarPanel[]
         {
@@ -94,6 +94,7 @@ namespace Invertor_sim
             modbusFactory = new ModbusFactory();
 
             registers = new InverterRegister[Enum.GetValues(typeof(RegisterEnum)).Length];
+
             registers[(int)RegisterEnum.BatteryVoltage] = new InverterRegister(RegisterEnum.BatteryVoltage, 0, UnitEnum.V.ToString(), 0, 62);//*
             registers[(int)RegisterEnum.StateOfCharge] = new InverterRegister(RegisterEnum.StateOfCharge, 0, UnitEnum.Percent.ToString(), 0, 100);//*
             registers[(int)RegisterEnum.BatteryBlocks] = new InverterRegister(RegisterEnum.BatteryBlocks, 0, UnitEnum.Blocks.ToString(), 0, 50);
@@ -120,7 +121,7 @@ namespace Invertor_sim
             registers[(int)RegisterEnum.DischargeCurrent] = new InverterRegister(RegisterEnum.DischargeCurrent, 0, UnitEnum.A.ToString(), 0, 190);
             registers[(int)RegisterEnum.MPPTVoltage] = new InverterRegister(RegisterEnum.MPPTVoltage, 0, UnitEnum.V.ToString(), 125, 425);
             registers[(int)RegisterEnum.GeneratorConnected] = new InverterRegister(RegisterEnum.GeneratorConnected, 0, UnitEnum.Error.ToString(), 0, 1);
-            registers[(int)RegisterEnum.SalePower] = new InverterRegister(RegisterEnum.SalePower, 0, UnitEnum.W.ToString(), 0, 99999999999); 
+            registers[(int)RegisterEnum.SalePower] = new InverterRegister(RegisterEnum.SalePower, 0, UnitEnum.W.ToString(), 0, 99999999999);
             registers[(int)RegisterEnum.GridVoltageOut] = new InverterRegister(RegisterEnum.GridVoltageOut, 0, UnitEnum.V.ToString(), 165, 290);
             registers[(int)RegisterEnum.GridPowerOut] = new InverterRegister(RegisterEnum.GridPowerOut, 0, UnitEnum.W.ToString(), 0, 6000);
             registers[(int)RegisterEnum.BatteryPowerUsage] = new InverterRegister(RegisterEnum.BatteryPowerUsage, 0, UnitEnum.W.ToString(), 0, 0);
@@ -131,6 +132,11 @@ namespace Invertor_sim
             registers[(int)RegisterEnum.MaximumBatteryCharge] = new InverterRegister(RegisterEnum.MaximumBatteryCharge, 100, UnitEnum.Percent.ToString(), 0, 100);
             registers[(int)RegisterEnum.MaintainingBatteryChargeLevel] = new InverterRegister(RegisterEnum.MaintainingBatteryChargeLevel, 100, UnitEnum.Percent.ToString(), 0, 100);
             registers[(int)RegisterEnum.LowWorkPower] = new InverterRegister(RegisterEnum.LowWorkPower, 0, UnitEnum.W.ToString(), 0, 1);
+
+
+            storage = new SlaveStorage(registers);
+            storage.HoldingRegisters.StorageOperationOccurred += OnStorageOperationOccurred;
+
 
             UpdateRegisterDisplay();
             //timer
@@ -165,16 +171,18 @@ namespace Invertor_sim
             panelTypeGrid2.DataSource = solarPanels2;
             panelTypeGrid2.DisplayMember = "Name";
 
+
+
         }
 
-       
+
 
         private void ClockTimer_Tick(object sender, EventArgs e)
         {
             currentTime = currentTime.AddSeconds(1); // Increment current time by one second
             labelCurrentTime.Text = currentTime.ToString("HH:mm:ss"); // Update time label
             UpdateRegisterDisplay();
-            
+
             UpdateFormLabels();
 
 
@@ -184,7 +192,8 @@ namespace Invertor_sim
 
         private void UpdateFormLabels()
         {
-
+            if(recivetmess != "")
+                listBoxReceivedCommands.Items.Add(recivetmess);
             UpdateBatteryInfo();
             UpdateBatteryFormInfo();
             UpdateGridsPanelCount();
@@ -211,43 +220,60 @@ namespace Invertor_sim
             }
 
         }
-        
+
         private void ComboBoxPorts_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (comboBoxPorts.SelectedItem.ToString() == "Port Not Selected")
+            // Отримуємо обраний порт
+            string selectedPort = comboBoxPorts.SelectedItem?.ToString();
+
+            // Перевірка, чи порт не обрано
+            if (string.IsNullOrEmpty(selectedPort) || selectedPort == "Port Not Selected")
             {
-                if (serialPort != null && serialPort.IsOpen)
-                {
-                    serialPort.Close();
-                    serialPort = null;
-                }
+                StopModbusTasks();
                 labelStatus.Text = "Port Not Selected";
                 return;
             }
-            
-            if (serialPort != null && serialPort.IsOpen)
-            {
-                try
-                {
-                    serialPort.DataReceived -= DataReceivedHandler;
-                    serialPort.Close();
-                }
-                catch (Exception ex)
-                {
-                    labelStatus.Text = "Error closing port: " + ex.Message;
-                }
-            }
 
-            string selectedPort = comboBoxPorts.SelectedItem.ToString();
-            int baudRate = int.Parse(comboBoxBaudRate.SelectedItem.ToString());
+            // Закриття попереднього порту і запуск нового підключення
+            StopModbusTasks();
 
             try
             {
+                // Перевірка вибраного baudRate
+                if (comboBoxBaudRate.SelectedItem == null)
+                {
+                    labelStatus.Text = "Error: Baud rate not selected.";
+                    return;
+                }
+
+                // Створення і відкриття нового серійного порту
+                int baudRate = int.Parse(comboBoxBaudRate.SelectedItem.ToString());
                 serialPort = new SerialPort(selectedPort, baudRate, Parity.None, 8, StopBits.One);
                 serialPort.Open();
 
-                modbusMaster = modbusFactory.CreateRtuMaster(serialPort);
-                serialPort.DataReceived += DataReceivedHandler;
+                // Ініціалізація Modbus
+                modbusFactory = new ModbusFactory();
+                var slaveNetwork = modbusFactory.CreateRtuSlaveNetwork(serialPort);
+                IModbusSlave slave = modbusFactory.CreateSlave(1, storage);
+                slaveNetwork.AddSlave(slave);
+
+                // Запуск прослуховування і оновлення реєстрів
+                cts = new CancellationTokenSource();
+                listenTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await slaveNetwork.ListenAsync(cts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Ігноруємо помилку, оскільки це результат скасування
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Error during ListenAsync: " + ex.Message);
+                    }
+                });
 
                 labelStatus.Text = "Connected to " + selectedPort;
             }
@@ -265,6 +291,57 @@ namespace Invertor_sim
             }
         }
 
+        private void StopModbusTasks()
+        {
+            // Зупиняємо прослуховування і оновлення реєстрів
+            if (cts != null)
+            {
+                cts.Cancel(); // Скасування задачі
+
+                try
+                {
+                    // Закриття порту без очікування завершення задачі
+                    if (serialPort != null && serialPort.IsOpen)
+                    {
+                        serialPort.Close(); // Закриваємо порт без чекаючої задачі
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error closing port: " + ex.Message);
+                }
+                finally
+                {
+                    cts.Dispose();
+                    cts = null;
+                }
+            }
+        }
+
+
+        //код який необхідно переписати, щоб він вказував який запут надійшов, що ми надіслали, виконую синхронізацію значення після отримання запиту
+        private static void OnStorageOperationOccurred(object sender, StorageEventArgs<ushort> e)
+        {
+            // Оновлення даних у реєстрах при зміні Modbus
+            recivetmess = "Operation:" + e.Operation  + ", Starting Address: " + e.StartingAddress + ", Points: " + string.Join(", ", e.Points);
+
+            if (e.Operation == PointOperation.Read)
+            {
+                storage.SyncInverterToModbus();
+            }
+            else if (e.Operation == PointOperation.Write)
+            {
+                foreach (var point in e.Points)
+                {
+                    storage.SyncModbusToInverter(e.StartingAddress, point);
+                }
+            }
+
+            Console.WriteLine($"Current Register Values: {storage.HoldingRegisters[0]}, {storage.HoldingRegisters[1]}");
+        }
+
+
+        //переписати і використати в методі отримання повідомлення
         private void DataReceivedHandler(object sender, SerialDataReceivedEventArgs e)
         {
             if (serialPort == null || !serialPort.IsOpen)
@@ -273,7 +350,6 @@ namespace Invertor_sim
             byte[] buffer = new byte[serialPort.BytesToRead];
             serialPort.Read(buffer, 0, buffer.Length);
 
-            PrintDataToConsole(buffer);
 
             Invoke(new Action(() =>
             {
@@ -282,8 +358,18 @@ namespace Invertor_sim
 
             try
             {
+                // Припускаємо, що запит зчитує Holding регістри
                 var request = modbusMaster.ReadHoldingRegisters(1, 0, (ushort)registers.Length);
-                ProcessRequest(request);
+
+                if (request.Length > 0)
+                {
+                    ProcessRequest(request);
+                }
+                else
+                {
+                    // Якщо запит на запис
+                    HandleWriteRequest(buffer);
+                }
             }
             catch (Exception ex)
             {
@@ -293,7 +379,7 @@ namespace Invertor_sim
                 }));
             }
         }
-
+        //видалити через непотрібність
         private void ProcessRequest(ushort[] request)
         {
             for (int i = 0; i < request.Length && i < registers.Length; i++)
@@ -309,21 +395,186 @@ namespace Invertor_sim
             }));
         }
 
+        //видалити метод через непотрібність
+        private void HandleWriteRequest(byte[] buffer)
+        {
+            // Створення пакету для запису в регістри на основі даних із буфера
+            ushort startingAddress = BitConverter.ToUInt16(buffer, 0); // Перші 2 байти — це стартова адреса
+            ushort[] valuesToWrite = new ushort[(buffer.Length - 2) / 2];
+
+            for (int i = 0; i < valuesToWrite.Length; i++)
+            {
+                valuesToWrite[i] = BitConverter.ToUInt16(buffer, 2 + i * 2);
+            }
+
+            // Оновлення значень регістрів
+            for (int i = 0; i < valuesToWrite.Length; i++)
+            {
+                int registerIndex = startingAddress + i;
+                if (registerIndex < registers.Length)
+                {
+                    registers[registerIndex].Value = valuesToWrite[i] / 100f;
+                }
+            }
+
+            Invoke(new Action(() =>
+            {
+                listBoxSentCommands.Items.Add("Processed Write Request for Registers starting at: " + startingAddress);
+            }));
+        }
 
 
-        //Form methods
-        //////////////
-        //////////////
+        ///////////////
+        ///////////////
+        //modbus
+        
+
+    
+
+    public class SlaveStorage : ISlaveDataStore
+    {
+        private readonly SparsePointSource<ushort> _holdingRegisters;
+        private readonly InverterRegister[] _inverterRegisters;
+
+        public byte[] GetRegisterData(InverterRegister register)
+        {
+            var json = JsonSerializer.Serialize(register);
+            return Encoding.UTF8.GetBytes(json);
+        }
+
+        public void SetRegisterData(byte[] data, InverterRegister register)
+        {
+            var json = Encoding.UTF8.GetString(data);
+            register = JsonSerializer.Deserialize<InverterRegister>(json);
+        }
+
+        public SlaveStorage(InverterRegister[] inverterRegisters)
+        {
+            _holdingRegisters = new SparsePointSource<ushort>();
+            _inverterRegisters = inverterRegisters;
+
+            // Ініціалізація значень регістрів з InverterRegister
+            foreach (var reg in inverterRegisters)
+            {
+                _holdingRegisters[reg.RegisterNumber] = reg.GetRegisterData();
+            }
+        }
+
+        public SparsePointSource<ushort> HoldingRegisters => _holdingRegisters;
+
+        IPointSource<ushort> ISlaveDataStore.HoldingRegisters => _holdingRegisters;
+        IPointSource<bool> ISlaveDataStore.CoilDiscretes => throw new NotImplementedException();
+        IPointSource<bool> ISlaveDataStore.CoilInputs => throw new NotImplementedException();
+        IPointSource<ushort> ISlaveDataStore.InputRegisters => throw new NotImplementedException();
+
+        // Метод для синхронізації даних
+        public void SyncInverterToModbus()
+        {
+            foreach (var reg in _inverterRegisters)
+            {
+                _holdingRegisters[reg.RegisterNumber] = reg.GetRegisterData();
+            }
+        }
+        public void SyncInverterToModbus(ushort registerNumber)
+        {
+            var reg = Array.Find(_inverterRegisters, r => r.RegisterNumber == registerNumber);
+            if (reg != null)
+            {
+                _holdingRegisters[reg.RegisterNumber] = reg.GetRegisterData();
+            }
+        }
+
+        public void SyncModbusToInverter(ushort registerNumber, ushort value)
+        {
+            var inverterReg = Array.Find(_inverterRegisters, r => r.RegisterNumber == registerNumber);
+            if (inverterReg != null)
+            {
+                inverterReg.Value = value / 100.0f; // Конвертація назад до float
+            }
+        }
+
+    }
+
+   
+
+    public class SparsePointSource<TPoint> : IPointSource<TPoint>
+    {
+        private readonly Dictionary<ushort, TPoint> _values = new Dictionary<ushort, TPoint>();
+
+        public event EventHandler<StorageEventArgs<TPoint>> StorageOperationOccurred;
+
+        public TPoint this[ushort registerIndex]
+        {
+            get
+            {
+                if (_values.TryGetValue(registerIndex, out var value))
+                    return value;
+                return default;
+            }
+            set => _values[registerIndex] = value;
+        }
+
+        public TPoint[] ReadPoints(ushort startAddress, ushort numberOfPoints)
+        {
+            var points = new TPoint[numberOfPoints];
+            for (ushort i = 0; i < numberOfPoints; i++)
+            {
+                points[i] = this[(ushort)(i + startAddress)];
+            }
+            StorageOperationOccurred?.Invoke(this, new StorageEventArgs<TPoint>(PointOperation.Read, startAddress, points));
+            return points;
+        }
+
+        public void WritePoints(ushort startAddress, TPoint[] points)
+        {
+            for (ushort i = 0; i < points.Length; i++)
+            {
+                this[(ushort)(i + startAddress)] = points[i];
+            }
+            StorageOperationOccurred?.Invoke(this, new StorageEventArgs<TPoint>(PointOperation.Write, startAddress, points));
+        }
+    }
+
+    public class StorageEventArgs<TPoint> : EventArgs
+    {
+        public StorageEventArgs(PointOperation operation, ushort startingAddress, TPoint[] points)
+        {
+            Operation = operation;
+            StartingAddress = startingAddress;
+            Points = points;
+        }
+
+        public PointOperation Operation { get; }
+        public ushort StartingAddress { get; }
+        public TPoint[] Points { get; }
+    }
+
+    public enum PointOperation
+    {
+        Read,
+        Write
+    }
 
 
-        private void PanelTypeGrid1_SelectedIndexChanged(object sender, EventArgs e)
+
+
+    ///////////////
+    ///////////////
+
+
+    //Form methods
+    //////////////
+    //////////////
+
+
+    private void PanelTypeGrid1_SelectedIndexChanged(object sender, EventArgs e)
         {
             selectedPanelGrid1 = (SolarPanel)panelTypeGrid1.SelectedItem;
             UpdateSolarGridPanelCount1();
         }
         private void maintainingCharge_ValueChanged(object sender, EventArgs e)
         {
-            if((float)maintainingCharge.Value >= registers[21].Value && (float)maintainingCharge.Value <= registers[34].Value)
+            if ((float)maintainingCharge.Value >= registers[21].Value && (float)maintainingCharge.Value <= registers[34].Value)
                 registers[35].Value = (float)maintainingCharge.Value;
         }
         private void PanelTypeGrid2_SelectedIndexChanged(object sender, EventArgs e)
@@ -422,7 +673,8 @@ namespace Invertor_sim
                 GetSolarGridPower(gridPower, registers[20], registers[19].Value, registers[16].MaxValue, GetVoltageAndCurrentGrid2(gridPower).Item1);
             }
         }
-        private (float,float) GetVoltageAndCurrentGrid1(float gridPower) {
+        private (float, float) GetVoltageAndCurrentGrid1(float gridPower)
+        {
 
             return CalculateMPPT(gridPower, PanelCountGrid1, selectedPanelGrid1.MaxWorkСurrent, selectedPanelGrid1.MaxWorkVoltage);
         }
@@ -454,7 +706,7 @@ namespace Invertor_sim
             {
                 solGridPowerRegister.Value = gridPower;
             }
-            
+
         }
 
         private void UpdateWorkStatus()
@@ -470,7 +722,7 @@ namespace Invertor_sim
         }
         private void UpdateUseGeneratorToCharge()
         {
-            if(useGenerator.Checked == true)
+            if (useGenerator.Checked == true)
             {
                 registers[30].Value = 1;
             }
@@ -481,7 +733,7 @@ namespace Invertor_sim
         }
         private void UpdateUseMainsGridToCharge()
         {
-            if(useMainsGrid.Checked == true)
+            if (useMainsGrid.Checked == true)
             {
                 registers[31].Value = 1;
             }
@@ -599,11 +851,12 @@ namespace Invertor_sim
         {
 
 
-            if(minimalCharge.Value < maximumCharge.Value)
+            if (minimalCharge.Value < maximumCharge.Value)
             {
                 registers[34].Value = (float)maximumCharge.Value;
                 registers[21].Value = (float)minimalCharge.Value;
-            }else
+            }
+            else
             {
                 maximumCharge.Value = (decimal)registers[34].Value;
                 minimalCharge.Value = (decimal)registers[21].Value;
@@ -614,7 +867,7 @@ namespace Invertor_sim
 
 
         }
-            private void checkBoxSolar1_MouseDown(object sender, MouseEventArgs e)
+        private void checkBoxSolar1_MouseDown(object sender, MouseEventArgs e)
         {
             ((CheckBox)sender).Enabled = false;
             ((CheckBox)sender).Enabled = true;
@@ -637,7 +890,7 @@ namespace Invertor_sim
         }
         //Add data to form
 
-       
+
         private void UpdateRegisterDisplay()//Замінити на форму з інформацією про регістри
         {
             listBoxBatteryInfo.Items.Clear(); // Очищення попереднього тексту
@@ -717,7 +970,7 @@ namespace Invertor_sim
         //register changes
         private void UpdateBatteryInfo()
         {
-            if (registers[4].Value != registers[5].Value &&  registers[2].Value != 0)
+            if (registers[4].Value != registers[5].Value && registers[2].Value != 0)
             {
                 registers[3].Value = registers[3].MaxValue * registers[1].Value / 100;
                 if (registers[3].MaxValue != 0)
@@ -729,9 +982,8 @@ namespace Invertor_sim
                 registers[8].Value = registers[4].Value * registers[3].MaxValue; // Макс запас енергії
                 registers[9].MaxValue = registers[8].Value;
                 registers[9].Value = registers[0].Value * registers[3].Value;
-
             }
-            
+
 
         }
         private float CalculateVoltageByMaxMinVoltageAndAh()
@@ -740,7 +992,7 @@ namespace Invertor_sim
         }
         private float CalculateBatteryCapacityInPercents()
         {
-            return registers[3].Value / registers[3].MaxValue *100;
+            return registers[3].Value / registers[3].MaxValue * 100;
         }
         private void UpdateBatteryRegisters()
         {
@@ -755,12 +1007,12 @@ namespace Invertor_sim
             registers[7].MaxValue = Math.Min(discharge, registers[33].Value);
 
         }
-        
+
         private void UpdateSolarGridPanelCount1()
         {
             MaxPanelCountGrid1 = UpdateSolarGrid1Data(selectedPanelGrid1, registers[17].MaxValue, registers[24].MaxValue);
         }
-        
+
 
         private void UpdateSolarGridPanelCount2()
         {
@@ -789,7 +1041,7 @@ namespace Invertor_sim
         {
             invertorPowerOut.Text = registers[28].Value.ToString();
             invertorVoltageOut.Text = registers[27].Value.ToString();
-            maxPowerOut.Text = "MaxPowerOut:" + registers[28].MaxValue.ToString(); 
+            maxPowerOut.Text = "MaxPowerOut:" + registers[28].MaxValue.ToString();
             powerSale.Text = "Amount Sold:" + registers[26].Value.ToString();
         }
 
@@ -813,10 +1065,10 @@ namespace Invertor_sim
         {
             UpdateMaxDisChargeCurrency((float)dischargePowerBatery.Value);
         }
-        private bool UpdateSolarGrid1PanelCount(NumericUpDown countPanelGrid, int  maxPanelCountGrid, SolarPanel selectedPanelGrid, float maxGridPower, float minGridVoltage, float maxSecondGridPower, float maxSolGridInputSum)
+        private bool UpdateSolarGrid1PanelCount(NumericUpDown countPanelGrid, int maxPanelCountGrid, SolarPanel selectedPanelGrid, float maxGridPower, float minGridVoltage, float maxSecondGridPower, float maxSolGridInputSum)
         {
             int formPanelCount = (int)countPanelGrid.Value;
-            if(formPanelCount <= maxPanelCountGrid)
+            if (formPanelCount <= maxPanelCountGrid)
             {
                 var gridPower = formPanelCount * selectedPanelGrid.MaxWorkVoltage * selectedPanelGrid.MaxWorkСurrent;
                 if (maxGridPower >= gridPower && maxSolGridInputSum >= gridPower + maxSecondGridPower && minGridVoltage < formPanelCount * selectedPanelGrid.MaxWorkVoltage)
@@ -846,7 +1098,7 @@ namespace Invertor_sim
         }
         private void UpdateGrid2PanelCount()
         {
-            
+
             if (!UpdateSolarGrid1PanelCount(countPanelGrid2,
                                            MaxPanelCountGrid2,
                                            selectedPanelGrid2,
@@ -1006,16 +1258,16 @@ namespace Invertor_sim
                     registers[14].Value = registers[14].MaxValue;
                 }
             }
-            
+
         }
         private void GeneratorStart()
         {
-            if (registers[14].MaxValue > 0 )
+            if (registers[14].MaxValue > 0)
                 SetGeneratorVoltage(220);
         }
 
-        
-        
+
+
         private void SetMainsGridPower(float power)
         {
             if (registers[13].Value > 0)
@@ -1035,13 +1287,13 @@ namespace Invertor_sim
 
         private void SetInvertorPowerOut(float power)
         {
-            if(registers[27].Value > 0)
+            if (registers[27].Value > 0)
                 registers[28].Value = power;
 
         }
         private void SetGeneratorVoltage(float voltage)
         {
-            if(voltage == 0)
+            if (voltage == 0)
             {
                 SetGeneratorPower(0);
                 registers[15].Value = voltage;
@@ -1130,7 +1382,7 @@ namespace Invertor_sim
             chargeI = registers[22].Value - chargeCur;
 
             float batteryCharge = registers[3].Value;
-            float chargeIa = chargeI / 3600f ;
+            float chargeIa = chargeI / 3600f;
             float setBattarycharge = Math.Min((chargeIa * Inverter_efficiency + registers[3].Value), registers[3].MaxValue * chargeLimit.Value / 100f);
             registers[3].Value = setBattarycharge;
 
@@ -1159,7 +1411,7 @@ namespace Invertor_sim
         {
             SetSimulatePowerUsageParametersToZero();
             float invertorWokrP = invertorWorkPower + registers[28].Value;
-            
+
             if (!BatteryConnected())
             {
                 if (registers[13].Value > 0)
@@ -1178,13 +1430,13 @@ namespace Invertor_sim
                     invertorWokrP -= registers[14].Value;
 
                 }
-                if(invertorWokrP > 0)
+                if (invertorWokrP > 0)
                     SetOutPowerLowError(invertorWokrP);
 
 
                 return;
             }
-            
+
             if (invertorWokrP <= registers[16].Value)
             {//використовуємо сонячні панелі
                 float solarPowerAvailble = registers[16].Value - invertorWokrP;
@@ -1201,9 +1453,9 @@ namespace Invertor_sim
 
                     if (chargeI >= deltaI)
                     {
-                        
 
-                        chargeI -= ChargeBattery(deltaI, registers[35]); 
+
+                        chargeI -= ChargeBattery(deltaI, registers[35]);
 
                         if (chargeI > 0)
                         {//використовуємо сонячні панелі для зарядки і продажу
@@ -1212,31 +1464,31 @@ namespace Invertor_sim
                             registers[26].Value += solarPowerAvailble / 1000;//перевірити часовий проміжок генерації
                         }
                     }
-                if(registers[1].Value < registers[35].Value)
-                {//якщо не вистачає потужності для заряду
-                    float deficiteI = (deltaI - chargeI);
-                    float deficiteP = deficiteI * registers[0].Value;
+                    if (registers[1].Value < registers[35].Value)
+                    {//якщо не вистачає потужності для заряду
+                        float deficiteI = (deltaI - chargeI);
+                        float deficiteP = deficiteI * registers[0].Value;
 
-                    if (registers[31].Value == 1)
-                    {
-                        SetMainsGridPower(deficiteP);
+                        if (registers[31].Value == 1)
+                        {
+                            SetMainsGridPower(deficiteP);
 
-                        ChargeBattery(registers[12].Value / registers[0].Value + chargeI, registers[35]);
+                            ChargeBattery(registers[12].Value / registers[0].Value + chargeI, registers[35]);
+                        }
+                        else if (registers[30].Value == 1)
+                        {
+                            if (registers[15].Value == 0)
+                                GeneratorStart();
+
+                            SetGeneratorPower(deficiteP);
+                            ChargeBattery(registers[14].Value / registers[0].Value + chargeI, registers[35]);
+                        }
+                        else
+                        {
+                            ChargeBattery(chargeI, registers[35]);
+                        }
+
                     }
-                    else if (registers[30].Value == 1)
-                    {
-                        if (registers[15].Value == 0)
-                            GeneratorStart();
-
-                        SetGeneratorPower(deficiteP);
-                        ChargeBattery(registers[14].Value / registers[0].Value + chargeI, registers[35]);
-                    }
-                    else
-                    {
-                        ChargeBattery(chargeI, registers[35]);
-                    }
-
-                }
                 }
             }
             else
@@ -1248,7 +1500,7 @@ namespace Invertor_sim
 
                     if (registers[1].Value > registers[35].Value)
                     {
-                          float workVoltage = registers[0].Value;
+                        float workVoltage = registers[0].Value;
                         deficiteP -= DischargeBattery(Math.Min(deficiteP / registers[0].Value, registers[7].Value), registers[21]) * workVoltage;
 
                         if (deficiteP > 0)
@@ -1277,27 +1529,28 @@ namespace Invertor_sim
                     }
                     else
                     {
-                       if (registers[13].Value > 0)
-                    {
-                        SetMainsGridPower(deficiteP);
+                        if (registers[13].Value > 0)
+                        {
+                            SetMainsGridPower(deficiteP);
 
-                        deficiteP -= registers[12].Value;
-                    }
-                    if (registers[25].Value == 1)
-                    {
-                        if (registers[15].Value == 0)
-                            GeneratorStart();
+                            deficiteP -= registers[12].Value;
+                        }
+                        if (registers[25].Value == 1)
+                        {
+                            if (registers[15].Value == 0)
+                                GeneratorStart();
 
-                        SetGeneratorPower(deficiteP);
+                            SetGeneratorPower(deficiteP);
 
-                        deficiteP -= registers[14].Value;
+                            deficiteP -= registers[14].Value;
 
-                    }
+                        }
                         if (deficiteP > 0)
                         {
                             float workVoltage = registers[0].Value;
                             deficiteP -= DischargeBattery(Math.Min(deficiteP / registers[0].Value, registers[7].Value), registers[21]) * workVoltage;
-                        }else
+                        }
+                        else
                         {
                             float deltaI = FindIForBatteryCharge();
 
@@ -1320,10 +1573,10 @@ namespace Invertor_sim
                                 SetGeneratorPower(ChargeBattery(charge, registers[35]) * registers[0].Value + registers[14].Value);
 
                             }
-                            
+
 
                         }
-                        if(deficiteP > 0)
+                        if (deficiteP > 0)
                         {
                             SetOutPowerLowError(deficiteP);
                         }
@@ -1358,7 +1611,7 @@ namespace Invertor_sim
                             float bufferI = (registers[12].MaxValue - registers[12].Value) / registers[0].Value;
                             float charge = Math.Min(bufferI, deltaI);
                             SetMainsGridPower(charge * registers[0].Value + registers[12].Value);
-                            
+
                             deltaI -= ChargeBattery(charge, registers[35]);
                         }
 
@@ -1368,7 +1621,7 @@ namespace Invertor_sim
                                 GeneratorStart();
                             float bufferI = (registers[14].MaxValue - registers[14].Value) / registers[0].Value;
                             float charge = Math.Min(bufferI, deltaI);
-                            
+
                             SetGeneratorPower(ChargeBattery(charge, registers[35]) * registers[0].Value + registers[14].Value);
 
                         }
