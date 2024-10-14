@@ -117,7 +117,10 @@ namespace Invertor_sim
         MaintainingBatteryChargeLevel = 35,
 
         [Description("Low Work Power")]
-        LowWorkPower = 36
+        LowWorkPower = 36,
+
+        [Description("Power consumption")]
+        PowerConsumption = 37
     }
 
 }

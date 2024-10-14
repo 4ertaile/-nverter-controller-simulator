@@ -63,12 +63,8 @@ namespace Invertor_sim
             this.parameterComboBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.parameterComboBox.FormattingEnabled = true;
             this.parameterComboBox.Items.AddRange(new object[] {
-            Invertor_sim.Parameter.Input_Voltage,
-            Invertor_sim.Parameter.Battery_Voltage,
-            Invertor_sim.Parameter.Battery_Percentage,
-            Invertor_sim.Parameter.Solar_Panel_Voltage,
-            Invertor_sim.Parameter.Solar_Generation_Power,
-            Invertor_sim.Parameter.User_Power_Usage});
+            Invertor_sim.Parameter.PowerConsumption,
+            Invertor_sim.Parameter.SolarGeneration});
             this.parameterComboBox.Location = new System.Drawing.Point(7, 32);
             this.parameterComboBox.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
             this.parameterComboBox.Name = "parameterComboBox";

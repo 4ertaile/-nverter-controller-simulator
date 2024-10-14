@@ -150,12 +150,8 @@ namespace Invertor_sim
                 var data = new InverterData
                 {
                     Time = currentTime.ToString("H:mm:ss"),
-                    InputVoltage = GetParameterValueAtCurrentX(Parameter.Input_Voltage.ToString(), xValue),
-                    BatteryVoltage = GetParameterValueAtCurrentX(Parameter.Battery_Voltage.ToString(), xValue),
-                    BatteryPercentage = GetParameterValueAtCurrentX(Parameter.Battery_Percentage.ToString(), xValue),
-                    SolarPanelVoltage = GetParameterValueAtCurrentX(Parameter.Solar_Panel_Voltage.ToString(), xValue),
-                    SolarGenerationPower = GetParameterValueAtCurrentX(Parameter.Solar_Generation_Power.ToString(), xValue),
-                    UserPowerUsage = GetParameterValueAtCurrentX(Parameter.User_Power_Usage.ToString(), xValue)
+                    PowerConsumption = GetParameterValueAtCurrentX(Parameter.PowerConsumption.ToString(), xValue),
+                    SolarGeneration = GetParameterValueAtCurrentX(Parameter.SolarGeneration.ToString(), xValue)
                 };
                 inverterDataList.Add(data);
                 currentTime = currentTime.AddMinutes(1);
@@ -179,19 +175,15 @@ namespace Invertor_sim
         // Збереження даних у файл із округленими значеннями
         private void SaveDataToFile()
         {
-            string date = dateTimePicker.Value.ToString("yyyy-MM-dd");
-            string fileName = $"InverterData_{date}.json";
+            string date = dateTimePicker.Value.ToString("dd-MM-yyyy");
+            string fileName = $"{date}.json";
 
             // Округлюємо кожне значення перед серіалізацією
             var roundedInverterDataList = inverterDataList.Select(data => new InverterData
             {
                 Time = data.Time,
-                InputVoltage = (float)Math.Round(data.InputVoltage, 2),
-                BatteryVoltage = (float)Math.Round(data.BatteryVoltage, 2),
-                BatteryPercentage = (float)Math.Round(data.BatteryPercentage, 2),
-                SolarPanelVoltage = (float)Math.Round(data.SolarPanelVoltage, 2),
-                SolarGenerationPower = (float)Math.Round(data.SolarGenerationPower, 2),
-                UserPowerUsage = (float)Math.Round(data.UserPowerUsage, 2)
+                PowerConsumption = (float)Math.Round(data.PowerConsumption, 2),
+                SolarGeneration = (float)Math.Round(data.SolarGeneration, 2)
             }).ToList();
 
             string jsonString = JsonConvert.SerializeObject(roundedInverterDataList, Formatting.Indented);

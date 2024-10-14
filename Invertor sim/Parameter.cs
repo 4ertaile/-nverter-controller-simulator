@@ -8,12 +8,8 @@ namespace Invertor_sim
 {
     enum Parameter
     {
-        Input_Voltage,
-        Battery_Voltage,
-        Battery_Percentage,
-        Solar_Panel_Voltage,
-        Solar_Generation_Power,
-        User_Power_Usage
+        PowerConsumption,
+        SolarGeneration
 
     }
 }

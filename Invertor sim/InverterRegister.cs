@@ -33,7 +33,7 @@ namespace Invertor_sim
 
         public ushort GetRegisterData()
         {
-            return (ushort)(Value * 100);
+            return (ushort)(Value);
         }
 
 

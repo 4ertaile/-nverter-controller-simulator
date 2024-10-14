@@ -44,6 +44,7 @@ namespace Invertor_sim
         private const float invertorWorkPower = 200f;
         private bool useFileSourse = false;
         private static string recivetmess = "";
+        private static bool messageRecived = false;
         //modbus
         private static SlaveStorage storage;
         private static CancellationTokenSource cts = new CancellationTokenSource();
@@ -132,6 +133,7 @@ namespace Invertor_sim
             registers[(int)RegisterEnum.MaximumBatteryCharge] = new InverterRegister(RegisterEnum.MaximumBatteryCharge, 100, UnitEnum.Percent.ToString(), 0, 100);
             registers[(int)RegisterEnum.MaintainingBatteryChargeLevel] = new InverterRegister(RegisterEnum.MaintainingBatteryChargeLevel, 100, UnitEnum.Percent.ToString(), 0, 100);
             registers[(int)RegisterEnum.LowWorkPower] = new InverterRegister(RegisterEnum.LowWorkPower, 0, UnitEnum.W.ToString(), 0, 1);
+            registers[(int)RegisterEnum.PowerConsumption] = new InverterRegister(RegisterEnum.PowerConsumption, 0, UnitEnum.W.ToString(), 0, 16200);
 
 
             storage = new SlaveStorage(registers);
@@ -192,8 +194,12 @@ namespace Invertor_sim
 
         private void UpdateFormLabels()
         {
-            if(recivetmess != "")
+            if (messageRecived)
+            {
                 listBoxReceivedCommands.Items.Add(recivetmess);
+                messageRecived = false;
+            }
+            storage.SyncInverterToModbus();
             UpdateBatteryInfo();
             UpdateBatteryFormInfo();
             UpdateGridsPanelCount();
@@ -324,7 +330,7 @@ namespace Invertor_sim
         {
             // Оновлення даних у реєстрах при зміні Modbus
             recivetmess = "Operation:" + e.Operation  + ", Starting Address: " + e.StartingAddress + ", Points: " + string.Join(", ", e.Points);
-
+            messageRecived = true;
             if (e.Operation == PointOperation.Read)
             {
                 storage.SyncInverterToModbus();
@@ -714,6 +720,7 @@ namespace Invertor_sim
             if (registers[11].Value != 0)
             {
                 startSimulation.Checked = false;
+                SetSimulatePowerUsageParametersToZero();
             }
             if (startSimulation.Checked == true)
             {
@@ -1397,6 +1404,7 @@ namespace Invertor_sim
         {
             registers[23].Value = 0f;
             registers[22].Value = 0f;
+            registers[(int)RegisterEnum.PowerConsumption].Value = 0f;
             SetGeneratorPower(0);
             SetMainsGridPower(0);
         }
@@ -1410,7 +1418,8 @@ namespace Invertor_sim
         private void SimulatePowerUsage()
         {
             SetSimulatePowerUsageParametersToZero();
-            float invertorWokrP = invertorWorkPower + registers[28].Value;
+            registers[(int)RegisterEnum.PowerConsumption].Value = invertorWorkPower + registers[28].Value;
+            float invertorWokrP = registers[(int)RegisterEnum.PowerConsumption].Value;
 
             if (!BatteryConnected())
             {
