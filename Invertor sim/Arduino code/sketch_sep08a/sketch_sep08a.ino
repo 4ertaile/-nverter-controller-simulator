@@ -737,17 +737,7 @@ String makeIndexFile(String chunk) {
       "</body>"
       "</html>";
   }
-  String pCode = "
-    const send_patch = (url) => async () =>{
-        let response = await fetch(url, {
-            method: 'PATCH',
-        });
 
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-    }
-  ";
   String pCode = "const send_patch = (url) => async () =>{"
         "let response = await fetch(url, {"
             "method: 'PATCH',});"
@@ -1001,15 +991,15 @@ void getInfoFromInvertor() {
 
 void loop() {
   getInfoFromInvertor();
-  std::vector<String> files = findFilesForLastDays(25);
-  std::vector<String> fil1 = findFilesByDayOfWeek("Sunday");
-    for (const auto &file : files) {
-         Serial.println(file);
-    }
+  // std::vector<String> files = findFilesForLastDays(25);
+  // std::vector<String> fil1 = findFilesByDayOfWeek("Sunday");
+  //   for (const auto &file : files) {
+  //        Serial.println(file);
+  //   }
 
-  for(const auto &file : fil1){
-         Serial.println(file);
-  }
+  // for(const auto &file : fil1){
+  //        Serial.println(file);
+  // }
 
   // Перевіряємо час для зчитування Modbus даних
 }
