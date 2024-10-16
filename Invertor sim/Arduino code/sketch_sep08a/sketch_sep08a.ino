@@ -3,6 +3,7 @@
 #include <ESPAsyncWebServer.h>
 #include <Preferences.h>
 #include <NTPClient.h>
+#include <HTTPClient.h>
 #include <WiFiUdp.h>
 #include <SD.h>
 #include <SPI.h>
@@ -25,6 +26,15 @@ int mode = 0;
 
 AsyncWebServer server(80);
 Preferences preferences;
+
+//weather options
+
+float latitude = 50.4501;          // Широта
+float longitude = 30.5234;         // Довгота
+float temperature;
+int cloudiness;
+char apiKey[32] = "";    // Ваш API-ключ OpenWeatherMap
+
 
 float solarGeneration = 0, powerConsumption = 0;
 bool isWorking = false, timeSynced = false;
@@ -58,10 +68,13 @@ void setup() {
   node.begin(1, Serial);  // ID = 1 (Slave address)
 
   // Завантажуємо налаштування Wi-Fi
-  preferences.begin("wifi-settings", false);
+  preferences.begin("esp-settings", false);
   preferences.getString("wifiSSID", wifiSSID, sizeof(wifiSSID));
   preferences.getString("wifiPassword", wifiPassword, sizeof(wifiPassword));
-  mode = preferences.getInt("mode", 0);  // За замовчуванням точка доступу
+  preferences.getString("apiKey", apiKey, sizeof(apiKey));
+  mode = preferences.getInt("mode", 0);
+  latitude = preferences.getFloat("latitude", 0);
+  longitude = preferences.getFloat("longitude", 0);
   isWorking = preferences.getBool("isWorking", false);  // Другий параметр — значення за замовчуванням
   preferences.end();
 
@@ -119,6 +132,44 @@ String getDayOfWeek(int dayIndex) {
     case 6: return "Friday";
     case 7: return "Saturday";
     default: return "";
+  }
+}
+
+// Функція для отримання температури та хмарності
+void getWeatherData(float lat, float lon, float &temperature, int &cloudiness) {
+  String units = "metric";
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+
+    // Формуємо API-запит з широтою, довготою та одиницями виміру
+    String apiUrl = "http://api.openweathermap.org/data/2.5/weather?lat=" + String(lat, 6) +
+                    "&lon=" + String(lon, 6) + "&appid=" + apiKey + "&units=" + units;
+
+    http.begin(apiUrl);  // Встановлюємо URL для запиту
+    int httpCode = http.GET();  // Виконуємо GET-запит
+
+    if (httpCode > 0) {
+      // Перевіряємо код відповіді
+      if (httpCode == HTTP_CODE_OK) {
+        String payload = http.getString();  // Отримуємо відповідь у вигляді строки
+
+        // Розбір JSON-даних
+        DynamicJsonDocument doc(1024);
+        deserializeJson(doc, payload);
+
+        // Отримуємо необхідні дані з JSON
+        temperature = doc["main"]["temp"];
+        cloudiness = doc["clouds"]["all"];
+      } else {
+        Serial.println("Error on HTTP request");
+      }
+    } else {
+      Serial.println("Failed to connect to API");
+    }
+
+    http.end();  // Закриваємо з'єднання
+  } else {
+    Serial.println("WiFi Disconnected");
   }
 }
 
@@ -580,18 +631,21 @@ void writeDataToSD(String requestTime) {
 void setupWebServer() {
   // Головна сторінка: Завантаження з SD-карти або повернення до стандартного варіанту
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    if (SD.begin(chipSelect)) {
+    if (SD.begin(chipSelect) &&  SD.open("/web/index.html")) {
       File file = SD.open("/web/index.html");
-      if (file) {
         request->send(SD, "/web/index.html", "text/html");
-        file.close();
+        file.close();       
+        }else{
         // Якщо файл не знайдено, повертаємо старий варіант сторінки
-        String html = "<form action='/save' method='POST'>"
-                      "<label>WiFi SSID:</label><input type='text' name='ssid' value='"
-                      + String(wifiSSID) + "'><br>"
-                                           "<label>WiFi Password:</label><input type='password' name='password' value='"
-                      + String(wifiPassword) + "'><br>"
-                                               "<input type='submit' value='Save'></form><br>"
+        String html = "<form action='/saveWifi' method='POST'>"
+                      "<label>WiFi SSID:</label><input type='text' name='ssid' value='"+ String(wifiSSID) + "'><br>"
+                      "<label>WiFi Password:</label><input type='password' name='password' value='"+ String(wifiPassword) + "'><br>"
+                      "<input type='submit' value='Save'></form><br>"
+                      "<form action='/saveWeather' method='POST'>"
+                      "<label>ApiKey:</label><input type='text' name='apiKey' value='"+ String(apiKey) + "'><br>"
+                      "<label>Latitude:</label><input  name='latitude' value='"+ String(latitude) + "'><br>"
+                      "<label>Longitude:</label><input  name='longitude' value='"+ String(longitude) + "'><br>"
+                      "<input type='submit' value='Save'></form><br>"
                                                "<button onclick=\"window.location.href='/start_ap'\">Start Access Point</button><br>"
                                                "<button onclick=\"window.location.href='/connect_wifi'\">Connect to WiFi</button><br>"
                                                "<button onclick=\"window.location.href='/sync_time'\">Synchronize Time</button><br>"
@@ -615,7 +669,7 @@ void setupWebServer() {
                                                                                    "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>";
         request->send(200, "text/html", html);
       }
-      }
+      
     
   });
 
@@ -656,14 +710,14 @@ void setupWebServer() {
   });
 
   // Інші наявні маршрути
-  server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {
+  server.on("/saveWifi", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
       String ssid = request->getParam("ssid", true)->value();
       String password = request->getParam("password", true)->value();
       ssid.toCharArray(wifiSSID, sizeof(wifiSSID));
       password.toCharArray(wifiPassword, sizeof(wifiPassword));
 
-      preferences.begin("wifi-settings", false);
+      preferences.begin("esp-settings", false);
       preferences.putString("wifiSSID", wifiSSID);
       preferences.putString("wifiPassword", wifiPassword);
       preferences.end();
@@ -676,8 +730,31 @@ void setupWebServer() {
     }
   });
 
+  server.on("/saveWeather", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("apiKey", true) && request->hasParam("latitude", true) && request->hasParam("longitude", true)) {
+      String newApiKey = request->getParam("apiKey", true)->value();
+      float newLatitude = request->getParam("latitude", true)->value().toFloat();
+      float newLongitude = request->getParam("longitude", true)->value().toFloat();
+
+      newApiKey.toCharArray(apiKey, sizeof(apiKey));
+
+      preferences.begin("esp-settings", false);
+      preferences.putString("apiKey", newApiKey);
+      preferences.putFloat("latitude", newLatitude);
+      preferences.putFloat("longitude", newLongitude);
+      preferences.end();
+
+      request->send(200, "text/html", "Settings saved! Restarting...");
+    } else {
+      request->send(400, "text/html", "Missing parameters");
+    }
+  });
+
+
+
+
   server.on("/start_work", HTTP_GET, [](AsyncWebServerRequest *request) {
-    preferences.begin("wifi-settings", false);
+    preferences.begin("esp-settings", false);
     preferences.putBool("isWorking", true);  // Точка доступу
     preferences.end();
     isWorking = true;
@@ -685,7 +762,7 @@ void setupWebServer() {
   });
 
   server.on("/stop_work", HTTP_GET, [](AsyncWebServerRequest *request) {
-    preferences.begin("wifi-settings", false);
+    preferences.begin("esp-settings", false);
     preferences.putBool("isWorking", false);  // Точка доступу
     preferences.end();
     isWorking = false;
@@ -698,7 +775,7 @@ void setupWebServer() {
   });
 
   server.on("/start_ap", HTTP_GET, [](AsyncWebServerRequest *request) {
-    preferences.begin("wifi-settings", false);
+    preferences.begin("esp-settings", false);
     preferences.putInt("mode", 0);  // Точка доступу
     preferences.end();
     request->send(200, "text/html", "Access Point mode set. Restarting...");
@@ -707,7 +784,7 @@ void setupWebServer() {
   });
 
   server.on("/connect_wifi", HTTP_GET, [](AsyncWebServerRequest *request) {
-    preferences.begin("wifi-settings", false);
+    preferences.begin("esp-settings", false);
     preferences.putInt("mode", 1);  // Режим Wi-Fi
     preferences.end();
     request->send(200, "text/html", "WiFi mode set. Restarting...");
@@ -751,6 +828,7 @@ void getInfoFromInvertor() {
     int minutes = timeClient.getMinutes();
     String time = String(hours < 10 ? "0" : "") + String(hours) + ":" + String(minutes < 10 ? "0" : "") + String(minutes) + ":" + "00";
     readModbusData();
+    getWeatherData(latitude, longitude, temperature, cloudiness);
     writeDataToSD(time);
   }
 }
