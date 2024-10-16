@@ -36,6 +36,7 @@ const FlexRow = styled.div`
     display: flex;
     flex-direction: row;
     align-items: center;
+    margin-top: 1rem;
     margin-left: 2rem;
 `;
 
