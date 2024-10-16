@@ -29,11 +29,11 @@ Preferences preferences;
 
 //weather options
 
-char latitude[32] = "";          // Широта
-char longitude[32] = "";         // Довгота
+char latitude[32] = "";   // Широта
+char longitude[32] = "";  // Довгота
 float temperature;
 int cloudiness;
-char apiKey[64] = "";    // Ваш API-ключ OpenWeatherMap
+char apiKey[64] = "";  // Ваш API-ключ OpenWeatherMap
 
 
 float solarGeneration = 0, powerConsumption = 0;
@@ -59,9 +59,9 @@ struct EnergyData {
   float PowerConsumption;
   float SolarGeneration;
   float Temperature;
-  float cloudiness;
+  float Сloudiness;
 };
- 
+
 
 void setup() {
   pinMode(LED_PIN, OUTPUT);  // Діод як вихід
@@ -76,8 +76,8 @@ void setup() {
   preferences.getString("wifiPassword", wifiPassword, sizeof(wifiPassword));
   preferences.getString("apiKey", apiKey, sizeof(apiKey));
   mode = preferences.getInt("mode", 0);
-  preferences.getString("latitude", latitude,sizeof(latitude));
-  preferences.getString("longitude", longitude,sizeof(longitude));
+  preferences.getString("latitude", latitude, sizeof(latitude));
+  preferences.getString("longitude", longitude, sizeof(longitude));
   isWorking = preferences.getBool("isWorking", false);  // Другий параметр — значення за замовчуванням
   preferences.end();
 
@@ -123,6 +123,7 @@ void setup() {
   Serial.println("Time: " + averageData.Time);
   Serial.println("Average Power Consumption: " + String(averageData.PowerConsumption));
   Serial.println("Average Solar Generation: " + String(averageData.SolarGeneration));
+
 }
 // Функція для повернення назви дня тижня
 String getDayOfWeek(int dayIndex) {
@@ -145,10 +146,9 @@ void getWeatherData(float lat, float lon, float &temperature, int &cloudiness) {
     HTTPClient http;
 
     // Формуємо API-запит з широтою, довготою та одиницями виміру
-    String apiUrl = "http://api.openweathermap.org/data/2.5/weather?lat=" + String(lat, 6) +
-                    "&lon=" + String(lon, 6) + "&appid=" + apiKey + "&units=" + units;
+    String apiUrl = "http://api.openweathermap.org/data/2.5/weather?lat=" + String(lat, 6) + "&lon=" + String(lon, 6) + "&appid=" + apiKey + "&units=" + units;
 
-    http.begin(apiUrl);  // Встановлюємо URL для запиту
+    http.begin(apiUrl);         // Встановлюємо URL для запиту
     int httpCode = http.GET();  // Виконуємо GET-запит
 
     if (httpCode > 0) {
@@ -399,6 +399,83 @@ std::vector<String> findFilesForLastDays(int daysToCheck) {
   return files;
 }
 
+std::vector<String> findFoldersByDayOfWeek(String dayOfWeek) {
+  std::vector<String> folders;
+  if (!sDIsOk()) {
+    return folders;
+  }
+  int daysToCheck = 25;  // Максимум 25 днів для перевірки
+
+  // Отримуємо поточну дату
+  String date = getFormattedDate();
+  String currentMonth = date.substring(5, 7);    // Отримуємо поточний місяць (MM)
+  String currentYear = date.substring(0, 4);     // Отримуємо поточний рік (YYYY)
+  String folderName = "/" + currentMonth + "_" + currentYear;  // Папка формату MM_YYYY
+  String currentDayInFormat = date.substring(8, 10) + "-" + currentMonth + "-" + currentYear;  // DD-MM-YYYY
+
+  // Перший пошук у поточному місяці
+  if (SD.exists(folderName)) {
+    File dir = SD.open(folderName);
+    while (true) {
+      File entry = dir.openNextFile();
+      if (!entry) break;
+
+      String folderName = entry.name();
+      // Перевіряємо, чи це папка і чи відповідає день тижня, при цьому не додаємо папку поточного дня
+      if (entry.isDirectory() && getDayOfWeekFromFileName(folderName) == dayOfWeek && currentDayInFormat != folderName) {
+        folders.push_back(folderName);
+      }
+      entry.close();
+
+      if (folders.size() >= 4) break;
+    }
+    dir.close();
+  }
+
+  // Якщо не вистачає папок у поточному місяці, перевіряємо попередній місяць
+  if (folders.size() < 4) {
+    int prevMonth = currentMonth.toInt() - 1;
+    int prevYear = currentYear.toInt();
+
+    // Якщо це січень, переходимо на попередній рік
+    if (prevMonth == 0) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+
+    String prevFolderName = "/" + (prevMonth < 10 ? "0" + String(prevMonth) : String(prevMonth)) + "_" + String(prevYear);
+
+    if (SD.exists(prevFolderName)) {
+      File dir = SD.open(prevFolderName);
+      while (true) {
+        File entry = dir.openNextFile();
+        if (!entry) break;
+
+        String folderName = entry.name();
+        if (entry.isDirectory() && getDayOfWeekFromFileName(folderName) == dayOfWeek) {
+          // Перевіряємо, чи не старіша ця папка більше ніж на 25 днів
+          tmElements_t folderDate = parseDate(folderName.substring(0, 10));
+          time_t folderTime = makeTime(folderDate);
+          time_t currentTime = timeClient.getEpochTime();
+          int dayDiff = (currentTime - folderTime) / SECS_PER_DAY;
+          if (dayDiff <= 25 && currentDayInFormat != folderName) {  // Уникаємо поточного дня
+            folders.push_back(folderName);
+          }
+        }
+        entry.close();
+
+        if (folders.size() >= 4) break;
+      }
+      dir.close();
+    }
+  }
+
+  return folders;
+}
+
+
+
+
 
 // Функція для пошуку перших 4 файлів за днями тижня, в межах 25 днів
 std::vector<String> findFilesByDayOfWeek(String dayOfWeek) {
@@ -514,35 +591,35 @@ String getFormattedDate() {
   return String(buffer);
 }
 
-String getTodayDataFilePathIfExist() {
-  String FileName = "";
-  String currentFileName = "";
+// String getTodayDataFilePathIfExist() {
+//   String FileName = "";
+//   String currentFileName = "";
 
-  String date = getFormattedDate();
-  String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                                  // /mm_yyyy
-  String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";  // dd-mm-yyyy.json
-  currentFileName = folderName + "/" + fileName;
+//   String date = getFormattedDate();
+//   String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                                  // /mm_yyyy
+//   String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";  // dd-mm-yyyy.json
+//   currentFileName = folderName + "/" + fileName;
 
-  if (SD.exists(folderName) && SD.exists(currentFileName)) {
-    return currentFileName;
-  }
-  return "";
-}
+//   if (SD.exists(folderName) && SD.exists(currentFileName)) {
+//     return currentFileName;
+//   }
+//   return "";
+// }
 
-String getTodayDataFileNameIfExist() {
-  String FileName = "";
-  String currentFileName = "";
+// String getTodayDataFileNameIfExist() {
+//   String FileName = "";
+//   String currentFileName = "";
 
-  String date = getFormattedDate();
-  String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                                  // /mm_yyyy
-  String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";  // dd-mm-yyyy.json
-  currentFileName = folderName + "/" + fileName;
+//   String date = getFormattedDate();
+//   String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                                  // /mm_yyyy
+//   String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";  // dd-mm-yyyy.json
+//   currentFileName = folderName + "/" + fileName;
 
-  if (SD.exists(folderName) && SD.exists(currentFileName)) {
-    return fileName;
-  }
-  return "";
-}
+//   if (SD.exists(folderName) && SD.exists(currentFileName)) {
+//     return fileName;
+//   }
+//   return "";
+// }
 
 bool sDIsOk() {
   if (SD.begin(chipSelect)) {
@@ -554,7 +631,6 @@ bool sDIsOk() {
   }
 }
 
-// Запис даних у JSON на SD-карту
 void writeDataToSD(String requestTime) {
   if (!sDIsOk()) {
     return;
@@ -563,19 +639,30 @@ void writeDataToSD(String requestTime) {
   currentFileName = "";
   fileStatus = "";
 
-  // Оновлюємо назву файлу відповідно до дати
+  // Оновлюємо назву файлу відповідно до дати і часу
   String date = getFormattedDate();
-  String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4); 
-  String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json"; 
+  String yearMonthFolder = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                          // MM_YYYY
+  String dayFolder = "/" + date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4);  // DD-MM-YYYY
+  String fileName = date.substring(8, 10) + ".json";                                                         // Формат: HH.json
 
-  if (!SD.exists(folderName)) {
-    if (!SD.mkdir(folderName)) {
-      fileParseStatus = "Failed to create folder: " + folderName;
+  // Створюємо папку року і місяця, якщо вона не існує
+  if (!SD.exists(yearMonthFolder)) {
+    if (!SD.mkdir(yearMonthFolder)) {
+      fileParseStatus = "Failed to create year-month folder: " + yearMonthFolder;
       return;
     }
   }
 
-  currentFileName = folderName + "/" + fileName;
+  // Створюємо папку дня, якщо вона не існує
+  String fullFolderPath = yearMonthFolder + dayFolder;
+  if (!SD.exists(fullFolderPath)) {
+    if (!SD.mkdir(fullFolderPath)) {
+      fileParseStatus = "Failed to create day folder: " + fullFolderPath;
+      return;
+    }
+  }
+
+  currentFileName = fullFolderPath + "/" + fileName;
 
   // Якщо файл не існує, створюємо новий
   if (!SD.exists(currentFileName)) {
@@ -611,7 +698,7 @@ void writeDataToSD(String requestTime) {
   // Якщо файл пустий або закритий, додаємо новий елемент
   if (lastChar == ']') {
     file.seek(file.size() - 1);  // Видаляємо закриваючу дужку
-    file.print(",");  // Додаємо кому перед новим елементом
+    file.print(",");             // Додаємо кому перед новим елементом
   }
 
   // Додаємо новий елемент у JSON масив
@@ -620,7 +707,8 @@ void writeDataToSD(String requestTime) {
   newRecord["Time"] = requestTime;
   newRecord["PowerConsumption"] = powerConsumption;
   newRecord["SolarGeneration"] = solarGeneration;
-
+  newRecord["Temperature"] = solarGeneration;
+  newRecord["Сloudiness"] = solarGeneration;
   // Записуємо новий елемент
   serializeJson(newRecord, file);
   file.print("]");  // Закриваємо масив
@@ -630,54 +718,60 @@ void writeDataToSD(String requestTime) {
   fileStatus = "Data written to SD card";
 }
 
+
 String makeIndexFile(String chunk) {
   String chunkUrl = "/static/" + chunk;
-  if(sDIsOk() && SD.open("/static/index.js")){
-  return "<!DOCTYPE html>"
-      "<html lang=\"en\">"
-      "<head>"
-        "<meta charset=\"utf-8\" />"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />"
-        "<title>The invertor controller</title>"
-        "<script src=\"/static/shared.js\"></script>"
-      "</head>"
-      "<body style=\"display: block;\">"
-        "<script src=" + chunkUrl + "></script>"
-        "<div id=\"app\"></div>"
-      "</body>"
-      "</html>";
+  if (sDIsOk() && SD.open("/static/index.js")) {
+    return "<!DOCTYPE html>"
+           "<html lang=\"en\">"
+           "<head>"
+           "<meta charset=\"utf-8\" />"
+           "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />"
+           "<title>The invertor controller</title>"
+           "<script src=\"/static/shared.js\"></script>"
+           "</head>"
+           "<body style=\"display: block;\">"
+           "<script src="
+           + chunkUrl + "></script>"
+                        "<div id=\"app\"></div>"
+                        "</body>"
+                        "</html>";
   }
   String html = "<form action='/saveWifi' method='POST'>"
-                      "<label>WiFi SSID:</label><input type='text' name='ssid' value='"+ String(wifiSSID) + "'><br>"
-                      "<label>WiFi Password:</label><input type='password' name='password' value='"+ String(wifiPassword) + "'><br>"
-                      "<input type='submit' value='Save'></form><br>"
-                      "<form action='/saveWeather' method='POST'>"
-                      "<label>ApiKey:</label><input type='text' name='apiKey' value='"+ String(apiKey) + "'><br>"
-                      "<label>Latitude:</label><input  name='latitude' value='"+ String(latitude) + "'><br>"
-                      "<label>Longitude:</label><input  name='longitude' value='"+ String(longitude) + "'><br>"
-                      "<input type='submit' value='Save'></form><br>"
-                      "<button onclick=\"window.location.href='/start_ap'\">Start Access Point</button><br>"
-                      "<button onclick=\"window.location.href='/connect_wifi'\">Connect to WiFi</button><br>"
-                      "<button onclick=\"window.location.href='/sync_time'\">Synchronize Time</button><br>"
-                      "<button onclick=\"window.location.href='/start_work'\">Start Work</button><br>"
-                      "<button onclick=\"window.location.href='/stop_work'\">Stop Work</button><br>"
-                      "<label>SD Status: "
-                       + String(SD_Status) + "</label><br>"
-                      "<label>SD isWorking: "
-                       + String(isWorking) + "</label><br>"
-                      "<label>WiFi status: "
-                       + String(Wifi_status) + "</label><br>"
-                      "<label>Current FileName: "
-                       + String(currentFileName) + "</label><br>"
-                      "<label>Current fileStatus: "
-                       + String(fileStatus) + "</label><br>"
-                        "<label>fileParseStatus: "
-                       + String(fileParseStatus) + "</label><br>"
-                         "<p>Current Time: "
-                       + getFormattedDate() + " " + timeClient.getFormattedTime() + "</p>"
-                       "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>";
-   return html;
-
+                "<label>WiFi SSID:</label><input type='text' name='ssid' value='"
+                + String(wifiSSID) + "'><br>"
+                                     "<label>WiFi Password:</label><input type='password' name='password' value='"
+                + String(wifiPassword) + "'><br>"
+                                         "<input type='submit' value='Save'></form><br>"
+                                         "<form action='/saveWeather' method='POST'>"
+                                         "<label>ApiKey:</label><input type='text' name='apiKey' value='"
+                + String(apiKey) + "'><br>"
+                                   "<label>Latitude:</label><input  name='latitude' value='"
+                + String(latitude) + "'><br>"
+                                     "<label>Longitude:</label><input  name='longitude' value='"
+                + String(longitude) + "'><br>"
+                                      "<input type='submit' value='Save'></form><br>"
+                                      "<button onclick=\"window.location.href='/start_ap'\">Start Access Point</button><br>"
+                                      "<button onclick=\"window.location.href='/connect_wifi'\">Connect to WiFi</button><br>"
+                                      "<button onclick=\"window.location.href='/sync_time'\">Synchronize Time</button><br>"
+                                      "<button onclick=\"window.location.href='/start_work'\">Start Work</button><br>"
+                                      "<button onclick=\"window.location.href='/stop_work'\">Stop Work</button><br>"
+                                      "<label>SD Status: "
+                + String(SD_Status) + "</label><br>"
+                                      "<label>SD isWorking: "
+                + String(isWorking) + "</label><br>"
+                                      "<label>WiFi status: "
+                + String(Wifi_status) + "</label><br>"
+                                        "<label>Current FileName: "
+                + String(currentFileName) + "</label><br>"
+                                            "<label>Current fileStatus: "
+                + String(fileStatus) + "</label><br>"
+                                       "<label>fileParseStatus: "
+                + String(fileParseStatus) + "</label><br>"
+                                            "<p>Current Time: "
+                + getFormattedDate() + " " + timeClient.getFormattedTime() + "</p>"
+                                                                             "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>";
+  return html;
 }
 
 void setupWebServer() {
@@ -720,11 +814,18 @@ void setupWebServer() {
     // Формуємо JSON з даними
     DynamicJsonDocument doc(1024);
 
-    doc["temperature"] = String(temperature);
-    doc["cloudiness"] = String(cloudiness);
+    doc["temperature"] = temperature;
+    doc["cloudiness"] = cloudiness;
+    doc["solarGeneration"] = solarGeneration;
+    doc["powerConsumption"] = powerConsumption;
+    doc["sdStatus"] = temperature;
+    doc["isWorking"] = cloudiness;
+    doc["wifiStatus"] = solarGeneration;
+    doc["currentFileName"] = powerConsumption;
+    doc["fileStatus"] = cloudiness;
+    doc["fileParseStatus"] = solarGeneration;
+    doc["time"] = String(getFormattedDate() + " " + timeClient.getFormattedTime());
 
-    doc["solarGeneration"] = String(solarGeneration);
-    doc["powerConsumption"] = String(powerConsumption);
 
     String jsonResponse;
     serializeJson(doc, jsonResponse);
@@ -733,17 +834,18 @@ void setupWebServer() {
     request->send(200, "application/json", jsonResponse);
   });
 
-  server.on("/options", HTTP_GET,[](AsyncWebServerRequest *request){
+  server.on("/options", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Формуємо JSON з даними
     DynamicJsonDocument doc(1024);
 
     // wifiSSID, wifiPassword, apiKey, latitude, longitude
 
-    doc["temperature"] = String(temperature);
-    doc["cloudiness"] = String(cloudiness);
+    doc["ssid"] = String(wifiSSID);
+    doc["password"] = String(wifiPassword);
 
-    doc["solarGeneration"] = String(solarGeneration);
-    doc["powerConsumption"] = String(powerConsumption);
+    doc["apiKey"] = String(apiKey);
+    doc["latitude"] = String(latitude);
+    doc["longitude"] = String(longitude);
 
     String jsonResponse;
     serializeJson(doc, jsonResponse);
@@ -767,11 +869,9 @@ void setupWebServer() {
       preferences.putString("wifiPassword", wifiPassword);
       preferences.end();
 
-      request->send(200, "text/html", "Settings saved! Restarting...");
-      delay(1000);
-      ESP.restart();
+      request->send(200);
     } else {
-      request->send(400, "text/html", "Missing parameters");
+      request->send(400);
     }
   });
 
@@ -791,9 +891,9 @@ void setupWebServer() {
       preferences.end();
 
 
-      request->send(200, "text/html", "Settings saved! Restarting...");
+      request->send(200);
     } else {
-      request->send(400, "text/html", "Missing parameters");
+      request->send(400);
     }
   });
 
@@ -802,7 +902,7 @@ void setupWebServer() {
     preferences.putBool("isWorking", true);  // Точка доступу
     preferences.end();
     isWorking = true;
-    request->send(200, "text/html", "Started Modbus reading and data logging.");
+    request->send(200);
   });
 
   server.on("/stop_work", HTTP_PATCH, [](AsyncWebServerRequest *request) {
@@ -810,19 +910,19 @@ void setupWebServer() {
     preferences.putBool("isWorking", false);  // Точка доступу
     preferences.end();
     isWorking = false;
-    request->send(200, "text/html", "Stopped Modbus reading and data logging.");
+    request->send(200);
   });
 
   server.on("/sync_time", HTTP_PATCH, [](AsyncWebServerRequest *request) {
     syncTime();
-    request->send(200, "text/html", "Time synchronization attempted.");
+    request->send(200);
   });
 
   server.on("/start_ap", HTTP_PATCH, [](AsyncWebServerRequest *request) {
     preferences.begin("esp-settings", false);
     preferences.putInt("mode", 0);  // Точка доступу
     preferences.end();
-    request->send(200, "text/html", "Access Point mode set. Restarting...");
+    request->send(200);
     delay(1000);
     ESP.restart();
   });
@@ -831,7 +931,7 @@ void setupWebServer() {
     preferences.begin("esp-settings", false);
     preferences.putInt("mode", 1);  // Режим Wi-Fi
     preferences.end();
-    request->send(200, "text/html", "WiFi mode set. Restarting...");
+    request->send(200);
     delay(1000);
     ESP.restart();
   });
@@ -877,6 +977,15 @@ void getInfoFromInvertor() {
 
 void loop() {
   getInfoFromInvertor();
+  std::vector<String> files = findFilesForLastDays(25);
+  std::vector<String> fil1 = findFilesByDayOfWeek("Sunday");
+    for (const auto &file : files) {
+         Serial.println(file);
+    }
+
+  for(const auto &file : fil1){
+         Serial.println(file);
+  }
 
   // Перевіряємо час для зчитування Modbus даних
 }
@@ -1093,218 +1202,4 @@ void loop() {
 //     Serial.print("Error updating register 35: ");
 //     Serial.println(result, HEX);
 //   }
-// }
-
-///////////
-// #include <Arduino.h>
-// #include <SPIFFS.h>
-// #include <ArduinoJson.h>
-
-// #define MINUTES_IN_DAY 1440  // 24 * 60
-// #define PREDICTION_MINUTES 30  // Кількість хвилин для прогнозу
-// #define TREND_WINDOW 5  // Кількість попередніх хвилин для обчислення тренду
-
-// // Структура для зберігання даних генерації
-// struct GenerationData {
-//   float power;         // Потужність генерації у ватах
-//   float temperature;   // Температура у градусах Цельсія
-//   float cloudiness;    // Хмарність (0-100%)
-// };
-
-// // Функція для обчислення сезонної ефективності
-// float calculateSeasonalEfficiency(int dayOfYear) {
-//   float seasonalEfficiency = (30 + 70 * pow(cos(PI * (dayOfYear - 200) / 365), 5)) / 100.0;
-//   return seasonalEfficiency;
-// }
-
-// // Функція для обчислення середнього значення генерації на конкретну хвилину за попередні дні
-// float calculateMinuteAverage(GenerationData** historicalData, int numDays, int minuteIndex) {
-//   float sum = 0;
-//   for (int i = 0; i < numDays; i++) {
-//     sum += historicalData[i][minuteIndex].power;
-//   }
-//   return sum / numDays;
-// }
-
-// // Функція для обчислення тренду генерації
-// float calculateTrend(GenerationData* currentDayData, int currentMinuteIndex) {
-//   if (currentMinuteIndex < 1) return 0;  // Не можемо обчислити тренд без попередніх даних
-
-//   int startIndex = currentMinuteIndex - TREND_WINDOW;
-//   if (startIndex < 0) startIndex = 0;
-
-//   float sumTrend = 0;
-//   int count = 0;
-
-//   for (int i = startIndex + 1; i <= currentMinuteIndex; i++) {
-//     sumTrend += (currentDayData[i].power - currentDayData[i - 1].power);
-//     count++;
-//   }
-
-//   if (count > 0)
-//     return sumTrend / count;
-//   else
-//     return 0;
-// }
-
-// // Функція для прогнозування генерації
-// void predictGeneration(GenerationData** historicalData30Days,
-//                        int numDays30,
-//                        GenerationData** historicalData3Days,
-//                        int numDays3,
-//                        GenerationData* currentDayData,
-//                        int currentMinuteIndex,
-//                        int dayOfYear,
-//                        int minutesToPredict) {
-
-//   // Обчислення сезонної ефективності
-//   float seasonalEfficiency = calculateSeasonalEfficiency(dayOfYear);
-
-//   // Отримання поточної температури та хмарності
-//   float currentTemperature = currentDayData[currentMinuteIndex].temperature;
-//   float currentCloudiness = currentDayData[currentMinuteIndex].cloudiness;
-
-//   // Обчислення тренду
-//   float trend = calculateTrend(currentDayData, currentMinuteIndex);
-
-//   // Ініціалізація вагових коефіцієнтів
-//   float weight30Days = 0.25;
-//   float weight3Days = 0.25;
-//   float weightTrend = 0.15;
-//   float weightTemperature = 0.2;
-//   float weightCloudiness = 0.15;
-
-//   Serial.println("Прогноз генерації на наступні хвилини:");
-
-//   float lastPrediction = currentDayData[currentMinuteIndex].power;  // Початкове значення генерації
-
-//   for (int i = 1; i <= minutesToPredict; i++) {
-//     int futureMinuteIndex = currentMinuteIndex + i;
-//     if (futureMinuteIndex >= MINUTES_IN_DAY) {
-//       futureMinuteIndex = futureMinuteIndex % MINUTES_IN_DAY;
-//     }
-
-//     // Обчислення середніх значень для майбутньої хвилини
-//     float avg30DaysFuture = calculateMinuteAverage(historicalData30Days, numDays30, futureMinuteIndex);
-//     float avg3DaysFuture = calculateMinuteAverage(historicalData3Days, numDays3, futureMinuteIndex);
-
-//     // Прогноз генерації
-//     float predictedGeneration = weight30Days * avg30DaysFuture +
-//                                 weight3Days * avg3DaysFuture +
-//                                 weightTrend * trend * i +  // Множимо на i для прогнозу в майбутнє
-//                                 weightTemperature * currentTemperature +
-//                                 (-weightCloudiness) * currentCloudiness;  // Негативний вплив хмарності
-
-//     // Застосовуємо сезонну ефективність
-//     predictedGeneration *= seasonalEfficiency;
-
-//     // Оновлюємо останнє прогнозоване значення
-//     lastPrediction = predictedGeneration;
-
-//     // Виводимо прогноз на кожну хвилину
-//     Serial.print("Хвилина ");
-//     Serial.print(futureMinuteIndex);
-//     Serial.print(": ");
-//     Serial.print(lastPrediction);
-//     Serial.println(" Вт");
-//   }
-// }
-
-// // Функція для завантаження даних з файлів JSON (спрощено для прикладу)
-// bool loadHistoricalData(const char* fileName, GenerationData* data) {
-//   File file = SPIFFS.open(fileName, "r");
-//   if (!file) {
-//     Serial.println("Помилка відкриття файлу");
-//     return false;
-//   }
-
-//   // Припустимо, що файл містить масив об'єктів з полями power, temperature, cloudiness
-//   StaticJsonDocument<4096> doc;  // Розмір може бути налаштований
-
-//   DeserializationError error = deserializeJson(doc, file);
-//   if (error) {
-//     Serial.println("Помилка парсингу JSON");
-//     file.close();
-//     return false;
-//   }
-
-//   JsonArray array = doc.as<JsonArray>();
-//   int index = 0;
-//   for (JsonObject obj : array) {
-//     if (index >= MINUTES_IN_DAY) break;
-//     data[index].power = obj["power"];
-//     data[index].temperature = obj["temperature"];
-//     data[index].cloudiness = obj["cloudiness"];
-//     index++;
-//   }
-
-//   file.close();
-//   return true;
-// }
-
-// void setup() {
-//   Serial.begin(115200);
-
-//   // Ініціалізація SPIFFS
-//   if (!SPIFFS.begin(true)) {
-//     Serial.println("Помилка ініціалізації SPIFFS");
-//     return;
-//   }
-
-//   // Завантаження історичних даних
-//   const int numDays30 = 30;
-//   GenerationData* historicalData30Days[numDays30];
-
-//   for (int i = 0; i < numDays30; i++) {
-//     historicalData30Days[i] = new GenerationData[MINUTES_IN_DAY];
-//     char fileName[20];
-//     snprintf(fileName, sizeof(fileName), "/day_%d.json", i + 1);  // Імена файлів: /day_1.json, /day_2.json, ...
-//     if (!loadHistoricalData(fileName, historicalData30Days[i])) {
-//       Serial.println("Помилка завантаження даних за 30 днів");
-//       return;
-//     }
-//   }
-
-//   // Завантаження даних за 3 дні (аналогічно)
-//   const int numDays3 = 3;
-//   GenerationData* historicalData3Days[numDays3];
-
-//   for (int i = 0; i < numDays3; i++) {
-//     historicalData3Days[i] = new GenerationData[MINUTES_IN_DAY];
-//     char fileName[20];
-//     snprintf(fileName, sizeof(fileName), "/day_%d.json", i + 1);  // Використовуємо ті ж файли для прикладу
-//     if (!loadHistoricalData(fileName, historicalData3Days[i])) {
-//       Serial.println("Помилка завантаження даних за 3 дні");
-//       return;
-//     }
-//   }
-
-//   // Завантаження даних поточного дня
-//   GenerationData currentDayData[MINUTES_IN_DAY];
-//   if (!loadHistoricalData("/current_day.json", currentDayData)) {
-//     Serial.println("Помилка завантаження даних поточного дня");
-//     return;
-//   }
-
-//   // Отримання поточного часу та дня року
-//   int currentMinuteIndex = 5 * 60 + 40;  // Наприклад, 5:40 ранку
-//   int dayOfYear = 200;  // Потрібно отримати актуальний день року
-
-//   // Виклик функції прогнозування
-//   predictGeneration(historicalData30Days, numDays30,
-//                     historicalData3Days, numDays3,
-//                     currentDayData, currentMinuteIndex,
-//                     dayOfYear, PREDICTION_MINUTES);
-
-//   // Очищення виділеної пам'яті
-//   for (int i = 0; i < numDays30; i++) {
-//     delete[] historicalData30Days[i];
-//   }
-//   for (int i = 0; i < numDays3; i++) {
-//     delete[] historicalData3Days[i];
-//   }
-// }
-
-// void loop() {
-//   // Порожній цикл
 // }
