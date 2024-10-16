@@ -738,7 +738,7 @@ String makeIndexFile(String chunk) {
       "</html>";
   }
   String pCode = "
-    const send_patch = (url: string) => async () =>{
+    const send_patch = (url) => async () =>{
         let response = await fetch(url, {
             method: 'PATCH',
         });
