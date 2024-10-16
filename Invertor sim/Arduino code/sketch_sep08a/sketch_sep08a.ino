@@ -796,13 +796,7 @@ void setupWebServer() {
     request->send(200, "text/html", html);
   });
 
-  server.on("/seeFiles", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String html = makeIndexFile("files.js");
-    request->send(200, "text/html", html);
-  });
-
-
-server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
     DynamicJsonDocument doc(1024);
     std::vector<String> files = findFilesForLastDays(25);
     // Додаємо всі файли у JSON-масив
