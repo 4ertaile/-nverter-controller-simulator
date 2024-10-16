@@ -59,6 +59,7 @@ struct EnergyData {
   float PowerConsumption;
   float SolarGeneration;
 };
+ 
 
 void setup() {
   pinMode(LED_PIN, OUTPUT);  // Діод як вихід
@@ -627,57 +628,101 @@ void writeDataToSD(String requestTime) {
   fileStatus = "Data written to SD card";
 }
 
+String makeIndexFile(String chunk) {
+  String chunkUrl = "/static/" + chunk;
+
+  String html = "
+      <!DOCTYPE html>
+      <html lang=\"en\">
+      <head>
+        <meta charset=\"utf-8\" />
+        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+        <title>The invertor controller</title>
+        <script src=\"/static/shared.js\"></script>
+      </head>
+      <body style=\"display: block;\">
+        <script src=" + chunkUrl + "></script>
+        <div id=\"app\"></div>
+      </body>
+      </html>
+    ";
+}
 
 void setupWebServer() {
   // Головна сторінка: Завантаження з SD-карти або повернення до стандартного варіанту
+
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    if (SD.begin(chipSelect) &&  SD.open("/web/index.html")) {
-      File file = SD.open("/web/index.html");
-        request->send(SD, "/web/index.html", "text/html");
-        file.close();       
-        }else{
-        // Якщо файл не знайдено, повертаємо старий варіант сторінки
-        String html = "<form action='/saveWifi' method='POST'>"
-                      "<label>WiFi SSID:</label><input type='text' name='ssid' value='"+ String(wifiSSID) + "'><br>"
-                      "<label>WiFi Password:</label><input type='password' name='password' value='"+ String(wifiPassword) + "'><br>"
-                      "<input type='submit' value='Save'></form><br>"
-                      "<form action='/saveWeather' method='POST'>"
-                      "<label>ApiKey:</label><input type='text' name='apiKey' value='"+ String(apiKey) + "'><br>"
-                      "<label>Latitude:</label><input  name='latitude' value='"+ String(latitude) + "'><br>"
-                      "<label>Longitude:</label><input  name='longitude' value='"+ String(longitude) + "'><br>"
-                      "<input type='submit' value='Save'></form><br>"
-                                               "<button onclick=\"window.location.href='/start_ap'\">Start Access Point</button><br>"
-                                               "<button onclick=\"window.location.href='/connect_wifi'\">Connect to WiFi</button><br>"
-                                               "<button onclick=\"window.location.href='/sync_time'\">Synchronize Time</button><br>"
-                                               "<button onclick=\"window.location.href='/start_work'\">Start Work</button><br>"
-                                               "<button onclick=\"window.location.href='/stop_work'\">Stop Work</button><br>"
-                                               "<button onclick=\"window.location.href='/getFiles'\">getFiles</button><br>"
-                                               "<label>SD Status: "
-                      + String(SD_Status) + "</label><br>"
-                                            "<label>SD isWorking: "
-                      + String(isWorking) + "</label><br>"
-                                            "<label>WiFi status: "
-                      + String(Wifi_status) + "</label><br>"
-                                              "<label>Current FileName: "
-                      + String(currentFileName) + "</label><br>"
-                                                  "<label>Current fileStatus: "
-                      + String(fileStatus) + "</label><br>"
-                                                 "<label>fileParseStatus: "
-                      + String(fileParseStatus) + "</label><br>"
-                                                  "<p>Current Time: "
-                      + getFormattedDate() + " " + timeClient.getFormattedTime() + "</p>"
-                                                                                   "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>";
-        request->send(200, "text/html", html);
-      }
-      
-    
+    String html = makeIndexFile("index.js");
+    request->send(200, "text/html", html);
   });
 
-  // Сервер для завантаження CSS та JS з SD-карти
-  server.serveStatic("/css/", SD, "/web/css/");
-  server.serveStatic("/js/", SD, "/web/js/");
+  server.on("/seeFiles", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String html = makeIndexFile("files.js");
+    request->send(200, "text/html", html);
+  });
 
-  // Додавання маршруту для перегляду статусу SD-карти та поточних даних
+  server.on("/getFiles", HTTP_GET, [](AsyncWebServerRequest *request)) {
+    std::vector<String> files = findFilesForLastDays(25);
+    String filesArray = "[";
+    for (int i = 0; i < files.size(); i++) {
+      filesArray += "{\"fname\": \"" + files[i] + "\", \"date\": \"" + getDayOfWeekFromFileName(files[i]) + "\"}";
+      if (i != files.size() - 1) {
+        filesArray += ",";
+      }
+    }
+    filesArray += "]";
+
+    String time = "\"" + getFormattedDate() + "\"";
+
+    String JsonData = "{\"files\": " + filesArray + "," + "\"time\": " + time + "}";
+    request->send(200, "application/json", JsonData);
+  }
+
+  // Сервер для завантаження files з SD-карти
+
+  // right is on sd card
+  server.serveStatic("/static/", SD, "/static/");
+
+  // migrate all the data interactions into this way
+  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Формуємо JSON з даними
+    DynamicJsonDocument doc(1024);
+
+    doc["temperature"] = String(temperature);
+    doc["cloudiness"] = String(cloudiness);
+
+    doc["solarGeneration"] = String(solarGeneration);
+    doc["powerConsumption"] = String(powerConsumption);
+
+    String jsonResponse;
+    serializeJson(doc, jsonResponse);
+
+    // Відправляємо JSON-відповідь
+    request->send(200, "application/json", jsonResponse);
+  });
+
+  server.on("/options", HTTP_GET,[](AsyncWebServerRequest *request){
+    // Формуємо JSON з даними
+    DynamicJsonDocument doc(1024);
+
+    // wifiSSID, wifiPassword, apiKey, latitude, longitude
+
+    doc["temperature"] = String(temperature);
+    doc["cloudiness"] = String(cloudiness);
+
+    doc["solarGeneration"] = String(solarGeneration);
+    doc["powerConsumption"] = String(powerConsumption);
+
+    String jsonResponse;
+    serializeJson(doc, jsonResponse);
+
+    // Відправляємо JSON-відповідь
+    request->send(200, "application/json", jsonResponse);
+  });
+
+  //{getFormattedDate()} {timeClient.getFormattedTime()}
+
+  // todo: make it return an actual status
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
     String html = "<h2>Current Data</h2>";
     html += "<p>Solar Generation: " + String(solarGeneration) + " W</p>";
@@ -713,7 +758,9 @@ void setupWebServer() {
   server.on("/saveWifi", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
       String ssid = request->getParam("ssid", true)->value();
+
       String password = request->getParam("password", true)->value();
+
       ssid.toCharArray(wifiSSID, sizeof(wifiSSID));
       password.toCharArray(wifiPassword, sizeof(wifiPassword));
 
@@ -750,10 +797,7 @@ void setupWebServer() {
     }
   });
 
-
-
-
-  server.on("/start_work", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/start_work", HTTP_PATCH, [](AsyncWebServerRequest *request) {
     preferences.begin("esp-settings", false);
     preferences.putBool("isWorking", true);  // Точка доступу
     preferences.end();
@@ -761,7 +805,7 @@ void setupWebServer() {
     request->send(200, "text/html", "Started Modbus reading and data logging.");
   });
 
-  server.on("/stop_work", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/stop_work", HTTP_PATCH, [](AsyncWebServerRequest *request) {
     preferences.begin("esp-settings", false);
     preferences.putBool("isWorking", false);  // Точка доступу
     preferences.end();
@@ -769,12 +813,12 @@ void setupWebServer() {
     request->send(200, "text/html", "Stopped Modbus reading and data logging.");
   });
 
-  server.on("/sync_time", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/sync_time", HTTP_PATCH, [](AsyncWebServerRequest *request) {
     syncTime();
     request->send(200, "text/html", "Time synchronization attempted.");
   });
 
-  server.on("/start_ap", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/start_ap", HTTP_PATCH, [](AsyncWebServerRequest *request) {
     preferences.begin("esp-settings", false);
     preferences.putInt("mode", 0);  // Точка доступу
     preferences.end();
@@ -783,7 +827,7 @@ void setupWebServer() {
     ESP.restart();
   });
 
-  server.on("/connect_wifi", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/connect_wifi", HTTP_PATCH, [](AsyncWebServerRequest *request) {
     preferences.begin("esp-settings", false);
     preferences.putInt("mode", 1);  // Режим Wi-Fi
     preferences.end();
@@ -794,8 +838,6 @@ void setupWebServer() {
 
   server.begin();
 }
-
-
 
 
 void startAccessPoint() {
