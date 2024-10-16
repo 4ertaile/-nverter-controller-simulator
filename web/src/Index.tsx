@@ -36,6 +36,7 @@ const FlexRow = styled.div`
     display: flex;
     flex-direction: row;
     align-items: center;
+    margin-left: 2rem;
 `;
 
 type Status = {
@@ -108,6 +109,7 @@ const App: React.FC = () => {
 
     const { data: status } = useSWR<Status>('/status', fetcher, { refreshInterval: REFETCH_INTERVAL });
 
+    //todo: fix this
     const { data: files } = useSWR<Files>('/files', fetcher, { refreshInterval: REFETCH_INTERVAL });
 
     
@@ -121,7 +123,10 @@ const App: React.FC = () => {
         }
     };
 
+    //todo: fix this
     const send_post = (url: string) => async (data: any) => {
+        console.log(data," send to ",url);
+
         const queryParams = new URLSearchParams(data).toString();
         const urlWithParams = `${url}?${queryParams}`;
 
@@ -134,7 +139,6 @@ const App: React.FC = () => {
         }
     }
 
-    // fix wifi form (populate)
 
     return (
         <div>
