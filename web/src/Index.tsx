@@ -66,6 +66,7 @@ const App: React.FC = () => {
 
     const { data: status } = useSWR<Status>('/status');
 
+    console.log(opts,status);
     const send_patch = (url: string) => async () =>{
         let response = await fetch(url, {
             method: 'PATCH',

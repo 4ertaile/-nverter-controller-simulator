@@ -737,17 +737,11 @@ String makeIndexFile(String chunk) {
       "</body>"
       "</html>";
   }
-  String pCode = "
-    const send_patch = (url: string) => async () =>{
-        let response = await fetch(url, {
-            method: 'PATCH',
-        });
-
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-    }
-  ";
+  String pCode = "const send_patch = (url) => async () =>{"
+        "let response = await fetch(url, {"
+            "method: 'PATCH',});"
+        "if (!response.ok) {"
+            "throw new Error('Network response was not ok');}}";
 
   String html = "<!DOCTYPE html>"
       "<html lang=\"en\">"
