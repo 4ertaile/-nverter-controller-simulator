@@ -29,11 +29,11 @@ Preferences preferences;
 
 //weather options
 
-float latitude = 50.4501;          // Широта
-float longitude = 30.5234;         // Довгота
+char latitude[32] = "";          // Широта
+char longitude[32] = "";         // Довгота
 float temperature;
 int cloudiness;
-char apiKey[32] = "";    // Ваш API-ключ OpenWeatherMap
+char apiKey[64] = "";    // Ваш API-ключ OpenWeatherMap
 
 
 float solarGeneration = 0, powerConsumption = 0;
@@ -58,6 +58,8 @@ struct EnergyData {
   String Time;
   float PowerConsumption;
   float SolarGeneration;
+  float Temperature;
+  float cloudiness;
 };
 
 void setup() {
@@ -73,8 +75,8 @@ void setup() {
   preferences.getString("wifiPassword", wifiPassword, sizeof(wifiPassword));
   preferences.getString("apiKey", apiKey, sizeof(apiKey));
   mode = preferences.getInt("mode", 0);
-  latitude = preferences.getFloat("latitude", 0);
-  longitude = preferences.getFloat("longitude", 0);
+  preferences.getString("latitude", latitude,sizeof(latitude));
+  preferences.getString("longitude", longitude,sizeof(longitude));
   isWorking = preferences.getBool("isWorking", false);  // Другий параметр — значення за замовчуванням
   preferences.end();
 
@@ -674,8 +676,8 @@ void setupWebServer() {
   });
 
   // Сервер для завантаження CSS та JS з SD-карти
-  server.serveStatic("/css/", SD, "/web/css/");
-  server.serveStatic("/js/", SD, "/web/js/");
+  // server.serveStatic("/css/", SD, "/web/css/");
+  // server.serveStatic("/js/", SD, "/web/js/");
 
   // Додавання маршруту для перегляду статусу SD-карти та поточних даних
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -730,19 +732,45 @@ void setupWebServer() {
     }
   });
 
+  server.on("/getFiles", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String html = "<html><body>";
+    html += "<h1>ESP32 SD Card Status</h1>";
+    html += "<p>SD Card Status: " + SD_Status + "</p>";
+
+    // Додано: пошук файлів за днем тижня
+    std::vector<String> sundayFiles = findFilesByDayOfWeek(getDayOfWeekFromFileName(getTodayDataFileNameIfExist()));
+    html += "<h2>Files for " + String(getDayOfWeekFromFileName(getTodayDataFileNameIfExist())) + ":</h2><ul>";
+    for (const auto &file : sundayFiles) {
+      html += "<li>" + file + "</li>";
+    }
+    html += "</ul>";
+
+    // Додано: пошук файлів за днем тижня
+    std::vector<String> last25Files = findFilesForLastDays(25);
+    html += "<h2>Files for last 25 days:</h2><ul>";
+    for (const auto &file : last25Files) {
+      html += "<li>" + file + "</li>";
+    }
+    html += "</ul>";
+
+    request->send(200, "text/html", html);
+  });
+  
   server.on("/saveWeather", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (request->hasParam("apiKey", true) && request->hasParam("latitude", true) && request->hasParam("longitude", true)) {
-      String newApiKey = request->getParam("apiKey", true)->value();
-      float newLatitude = request->getParam("latitude", true)->value().toFloat();
-      float newLongitude = request->getParam("longitude", true)->value().toFloat();
-
-      newApiKey.toCharArray(apiKey, sizeof(apiKey));
+      String NapiKey = request->getParam("apiKey", true)->value();
+      String Nlatitude = request->getParam("latitude", true)->value();
+      String Nlongitude = request->getParam("longitude", true)->value();
+      NapiKey.toCharArray(apiKey, sizeof(apiKey));
+      Nlatitude.toCharArray(latitude, sizeof(latitude));
+      Nlongitude.toCharArray(longitude, sizeof(longitude));
 
       preferences.begin("esp-settings", false);
-      preferences.putString("apiKey", newApiKey);
-      preferences.putFloat("latitude", newLatitude);
-      preferences.putFloat("longitude", newLongitude);
+      preferences.putString("apiKey", NapiKey);
+      preferences.putString("latitude", Nlatitude);
+      preferences.putString("longitude", Nlongitude);
       preferences.end();
+
 
       request->send(200, "text/html", "Settings saved! Restarting...");
     } else {
@@ -828,13 +856,14 @@ void getInfoFromInvertor() {
     int minutes = timeClient.getMinutes();
     String time = String(hours < 10 ? "0" : "") + String(hours) + ":" + String(minutes < 10 ? "0" : "") + String(minutes) + ":" + "00";
     readModbusData();
-    getWeatherData(latitude, longitude, temperature, cloudiness);
+    getWeatherData(atof(latitude), atof(longitude), temperature, cloudiness);
     writeDataToSD(time);
   }
 }
 
 void loop() {
   getInfoFromInvertor();
+
   // Перевіряємо час для зчитування Modbus даних
 }
 
