@@ -42,7 +42,12 @@ type Status = {
     currentFileName: string;
     fileStatus: string;
     fileParseStatus: string;
-    time: string
+    time: string,
+
+    temperature: number,
+    cloudiness: number,
+    solarGeneration: number,
+    powerConsumption: number,
 }
 
 type Opts = {
@@ -58,7 +63,7 @@ const App: React.FC = () => {
     const [opts,setOpts] = React.useState<Opts | null>(null);
 
     (async () => {
-        let resp = await fetch('/opts', {
+        let resp = await fetch('/options', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -71,7 +76,7 @@ const App: React.FC = () => {
     const [status,setStatus] = React.useState<Status | null>(null);
 
     window.setInterval(async () => {
-        setStatus(null);
+        // setStatus(null);
         let resp = await fetch('/status', {
             method: 'GET',
             headers: {
@@ -97,19 +102,19 @@ const App: React.FC = () => {
             {opts && (<FlexRow>
                 <Form action='/saveWifi' method='POST'>
                     <TextLabel>WiFi SSID:</TextLabel>
-                    <input type='text' name='ssid' value={opts.wifiSSID} /><br />
+                    <SInput type='text' name='ssid' value={opts.wifiSSID} /><br />
                     <TextLabel>WiFi Password:</TextLabel>
-                    <input type='password' name='password' value={opts.wifiPassword} /><br />
-                    <input type='submit' value='Save' />
+                    <SInput type='password' name='password' value={opts.wifiPassword} /><br />
+                    <SInput type='submit' value='Save' />
                 </Form>
                 <Form action='/saveWeather' method='POST'>
                     <TextLabel>ApiKey:</TextLabel>
-                    <input type='text' name='apiKey' value={opts.apiKey} /><br />
+                    <SInput type='text' name='apiKey' value={opts.apiKey} /><br />
                     <TextLabel>Latitude:</TextLabel>
-                    <input name='latitude' value={opts.latitude} /><br />
+                    <SInput name='latitude' value={opts.latitude} /><br />
                     <TextLabel>Longitude:</TextLabel>
-                    <input name='longitude' value={opts.longitude} /><br />
-                    <input type='submit' value='Save' />
+                    <SInput name='longitude' value={opts.longitude} /><br />
+                    <SInput type='submit' value='Save' />
                 </Form>
             </FlexRow>)}
 
@@ -132,7 +137,11 @@ const App: React.FC = () => {
                     <TextLabel>fileParseStatus: {status.fileParseStatus}</TextLabel><br />
                     
                     <TextLabel>Current Time: {status.time}</TextLabel>
-                    {/* <button onClick={() => window.location.href='/status'}>View SD Card and Data</button><br /> */}
+                    <TextLabel>Temperature: {status.temperature}</TextLabel>
+
+                    <TextLabel>Cloudiness: {status.cloudiness}</TextLabel>
+                    <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel>
+                    <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel>
                 </div>)}
             </FlexRow>
         </div>

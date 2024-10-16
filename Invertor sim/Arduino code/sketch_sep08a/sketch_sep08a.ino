@@ -632,7 +632,8 @@ void writeDataToSD(String requestTime) {
 
 String makeIndexFile(String chunk) {
   String chunkUrl = "/static/" + chunk;
-  if(sDIsOk() && SD.open("/static/index.js")){
+
+  if (sDIsOk() && SD.open("/static/index.js")) {
   return "<!DOCTYPE html>"
       "<html lang=\"en\">"
       "<head>"
@@ -647,7 +648,28 @@ String makeIndexFile(String chunk) {
       "</body>"
       "</html>";
   }
-  String html = "<form action='/saveWifi' method='POST'>"
+  String pCode = "
+    const send_patch = (url: string) => async () =>{
+        let response = await fetch(url, {
+            method: 'PATCH',
+        });
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+    }
+  ";
+
+  String html = "<!DOCTYPE html>"
+      "<html lang=\"en\">"
+      "<head>"
+        "<meta charset=\"utf-8\" />"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />"
+        "<title>The invertor controller</title>"
+        "<script>"+pCode+"</script>"
+      "</head>"
+      "<body style=\"display: block;\">"
+        "<form action='/saveWifi' method='POST'>"
                       "<label>WiFi SSID:</label><input type='text' name='ssid' value='"+ String(wifiSSID) + "'><br>"
                       "<label>WiFi Password:</label><input type='password' name='password' value='"+ String(wifiPassword) + "'><br>"
                       "<input type='submit' value='Save'></form><br>"
@@ -656,11 +678,11 @@ String makeIndexFile(String chunk) {
                       "<label>Latitude:</label><input  name='latitude' value='"+ String(latitude) + "'><br>"
                       "<label>Longitude:</label><input  name='longitude' value='"+ String(longitude) + "'><br>"
                       "<input type='submit' value='Save'></form><br>"
-                      "<button onclick=\"window.location.href='/start_ap'\">Start Access Point</button><br>"
-                      "<button onclick=\"window.location.href='/connect_wifi'\">Connect to WiFi</button><br>"
-                      "<button onclick=\"window.location.href='/sync_time'\">Synchronize Time</button><br>"
-                      "<button onclick=\"window.location.href='/start_work'\">Start Work</button><br>"
-                      "<button onclick=\"window.location.href='/stop_work'\">Stop Work</button><br>"
+                      "<button onclick=\"send_patch('/start_ap')\">Start Access Point</button><br>"
+                      "<button onclick=\"send_patch('/connect_wifi')\">Connect to WiFi</button><br>"
+                      "<button onclick=\"send_patch('/sync_time')\">Synchronize Time</button><br>"
+                      "<button onclick=\"send_patch('/start_work')\">Start Work</button><br>"
+                      "<button onclick=\"send_patch('/stop_work')\">Stop Work</button><br>"
                       "<label>SD Status: "
                        + String(SD_Status) + "</label><br>"
                       "<label>SD isWorking: "
@@ -675,7 +697,9 @@ String makeIndexFile(String chunk) {
                        + String(fileParseStatus) + "</label><br>"
                          "<p>Current Time: "
                        + getFormattedDate() + " " + timeClient.getFormattedTime() + "</p>"
-                       "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>";
+                       "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>"
+      "</body>"
+      "</html>";
    return html;
 
 }
