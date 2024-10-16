@@ -43,6 +43,12 @@ bool ledStopFlag = false;
 const unsigned long blinkDuration = 120000;  // Тривалість миготіння 2 хв
 String fileParseStatus = "";
 
+// Структура для збереження даних
+struct EnergyData {
+  String Time;
+  float PowerConsumption;
+  float SolarGeneration;
+};
 
 void setup() {
   pinMode(LED_PIN, OUTPUT);  // Діод як вихід
@@ -56,6 +62,7 @@ void setup() {
   preferences.getString("wifiSSID", wifiSSID, sizeof(wifiSSID));
   preferences.getString("wifiPassword", wifiPassword, sizeof(wifiPassword));
   mode = preferences.getInt("mode", 0);  // За замовчуванням точка доступу
+  isWorking = preferences.getBool("isWorking", false);  // Другий параметр — значення за замовчуванням
   preferences.end();
 
   if (!SD.begin(chipSelect)) {
@@ -63,8 +70,6 @@ void setup() {
   } else {
     SD_Status = "SD card initialization fine";
   }
-
-
 
   if (mode == 1) {
     WiFi.mode(WIFI_STA);
@@ -93,6 +98,153 @@ void setup() {
   // Запуск індикації діодом
   ledStopFlag = false;
   xTaskCreate(ledTask, "LED Blink Task", 1024, NULL, 1, &ledTaskHandle);
+  //delete this
+  std::vector<String> filePaths = { "/09_2024/18-09-2024.json", "/09_2024/23-09-2024.json" };
+  String searchTime = "12:05:00";
+
+  EnergyData averageData = processFilesAndGetAverage(filePaths, searchTime);
+
+  Serial.println("Time: " + averageData.Time);
+  Serial.println("Average Power Consumption: " + String(averageData.PowerConsumption));
+  Serial.println("Average Solar Generation: " + String(averageData.SolarGeneration));
+}
+// Функція для повернення назви дня тижня
+String getDayOfWeek(int dayIndex) {
+  switch (dayIndex) {
+    case 1: return "Sunday";
+    case 2: return "Monday";
+    case 3: return "Tuesday";
+    case 4: return "Wednesday";
+    case 5: return "Thursday";
+    case 6: return "Friday";
+    case 7: return "Saturday";
+    default: return "";
+  }
+}
+
+// Функція для перетворення часу з формату "HH:MM:SS" у кількість секунд з початку дня
+time_t convertToSecondsFromMidnight(String timeString) {
+  int hour, minute, second;
+
+  // Парсинг строки часу в формате "HH:MM:SS"
+  sscanf(timeString.c_str(), "%d:%d:%d", &hour, &minute, &second);
+
+  // Перетворюємо час у секунди з початку дня
+  return hour * 3600 + minute * 60 + second;
+}
+
+EnergyData processFilesAndGetAverage(std::vector<String> filePaths, String searchTime) {
+  float totalPowerConsumption = 0.0;
+  float totalSolarGeneration = 0.0;
+  int count = 0;
+  const size_t bufferSize = 14000;  // Размер буфера для чтения файла
+  const size_t bufferSizeForStruct = 256;
+
+  for (const String &filePath : filePaths) {
+    File file = SD.open(filePath, FILE_READ);
+    if (!file) {
+      Serial.println("Failed to open file: " + filePath);
+      continue;
+    }
+
+    // Создаем буфер для чтения части файла
+    String buffer = "[";
+    int braceCount = 0;  // Счетчик для символов '}'
+    String lastStructBuffer = "";
+    bool found = false;
+
+    // Читаем файл порциями
+    while (file.available() && buffer.length() < bufferSize - 1) {  // -1 для добавления ']'
+      char ch = (char)file.read();
+      if (buffer.length() == 1 && ch == ',') {
+        continue;
+      }
+      if (braceCount == 119) {
+        lastStructBuffer += ch;
+      }
+      // Увеличиваем счетчик, если встречаем '}'
+      if (ch == '}') {
+        braceCount++;
+      }
+      // Если символ не '[' и ']', добавляем его в буфер
+      if (ch != '[' && ch != ']') {
+        buffer += ch;
+      }
+      // Если буфер не пустой, завершаем массив JSON
+      if (buffer.length() > 1 && (braceCount >= 120 || !file.available())) {  // Более 1 для учета '[' и ']'
+        buffer += "]";                                                        // Завершаем массив JSON
+        lastStructBuffer = lastStructBuffer.substring(1);
+
+        // Парсим маленький JSON-объект
+        DynamicJsonDocument smallDoc(bufferSizeForStruct);
+        DeserializationError smallError = deserializeJson(smallDoc, lastStructBuffer);
+        if (smallError) {
+          Serial.println("Error deserializing JSON: " + String(smallError.f_str()));
+          buffer = "[";
+          lastStructBuffer = "";
+          braceCount = 0;  // Счетчик для символов '}'
+          smallDoc.clear();
+          continue;
+        }
+        JsonObject data = smallDoc.as<JsonObject>();
+        if (convertToSecondsFromMidnight(data["Time"]) < convertToSecondsFromMidnight(searchTime)) {
+          buffer = "[";
+          lastStructBuffer = "";
+          braceCount = 0;  // Счетчик для символов '}'
+          smallDoc.clear();
+          continue;
+        }
+        smallDoc.clear();
+
+        // Парсим основной JSON-объект
+        DynamicJsonDocument largeDoc(bufferSize);
+        DeserializationError largeError = deserializeJson(largeDoc, buffer);
+        if (largeError) {
+          Serial.println("Error deserializing JSON: " + String(largeError.f_str()));
+          buffer = "[";
+          lastStructBuffer = "";
+          braceCount = 0;  // Счетчик для символов '}'
+          smallDoc.clear();
+          continue;
+        }
+
+        // Шукаємо запис із відповідним часом
+        JsonArray dataArray = largeDoc.as<JsonArray>();
+        for (JsonObject record : dataArray) {
+          if (record["Time"] == searchTime) {
+            totalPowerConsumption += record["PowerConsumption"].as<float>();
+            totalSolarGeneration += record["SolarGeneration"].as<float>();
+            count++;
+            found = true;
+            break;  // Если нашли соответствующий запись, выходим из цикла
+          }
+        }
+        largeDoc.clear();
+        buffer = "[";
+        lastStructBuffer = "";
+        braceCount = 0;  // Счетчик для символов '}'
+      }
+      if (found) {
+        break;
+      }
+    }
+    file.close();
+  }
+
+  // Обчислюємо середнє значення
+  EnergyData result;
+  result.Time = searchTime;
+
+  if (count > 0) {
+    result.PowerConsumption = totalPowerConsumption / count;
+    result.SolarGeneration = totalSolarGeneration / count;
+  } else {
+    result.PowerConsumption = 0.0;
+    result.SolarGeneration = 0.0;
+    Serial.println("No matching records found for time: " + searchTime);
+  }
+
+  return result;
 }
 
 // Допоміжна функція для перетворення рядка "dd-mm-yyyy" на структуру часу tmElements_t
@@ -120,148 +272,150 @@ String getDayOfWeekFromFileName(String fileName) {
 
   return getDayOfWeek(dayOfWeek);
 }
-std::vector<String> findFilesForLast25Days() {
-    std::vector<String> files;
-    int daysToCheck = 25;  // Кількість днів для перевірки
-    time_t currentTime = now();  // Отримуємо поточний час
 
-    // Отримуємо поточний місяць і рік
-    String currentMonth = getFormattedDate().substring(5, 7);
-    String currentYear = getFormattedDate().substring(0, 4);
-    int currentDay = getFormattedDate().substring(8, 10).toInt();
-
-    // Перевіряємо поточний місяць
-    String folderName = "/" + currentMonth + "_" + currentYear;
-    if (SD.exists(folderName)) {
-        File dir = SD.open(folderName);
-        while (true) {
-            File entry = dir.openNextFile();
-            if (!entry) break;
-
-            String fileName = entry.name();
-            tmElements_t fileDate = parseDate(fileName.substring(0, 10));
-            time_t fileTime = makeTime(fileDate);
-            int dayDiff = (currentTime - fileTime) / SECS_PER_DAY;
-
-            // Перевіряємо, чи файл містить дані за останні 25 днів
-            if (dayDiff > 0 && dayDiff <= daysToCheck) {
-                files.push_back(folderName + "/" + fileName);
-            }
-            entry.close();
-        }
-        dir.close();
-    }
-
-    // Якщо у поточному місяці не вистачає днів, переходимо до попереднього
-    int remainingDays = daysToCheck - files.size();
-    if (remainingDays > 0) {
-        int prevMonth = currentMonth.toInt() - 1;
-        int prevYear = currentYear.toInt();
-
-        // Якщо це січень, переходимо на попередній рік
-        if (prevMonth == 0) {
-            prevMonth = 12;
-            prevYear -= 1;
-        }
-
-        // Формуємо назву попередньої папки
-        String prevFolderName = "/" + (prevMonth < 10 ? "0" + String(prevMonth) : String(prevMonth)) + "_" + String(prevYear);
-
-        if (SD.exists(prevFolderName)) {
-            File dir = SD.open(prevFolderName);
-            while (true) {
-                File entry = dir.openNextFile();
-                if (!entry) break;
-
-                String fileName = entry.name();
-                tmElements_t fileDate = parseDate(fileName.substring(0, 10));
-                time_t fileTime = makeTime(fileDate);
-                int dayDiff = (currentTime - fileTime) / SECS_PER_DAY;
-
-                // Перевіряємо, чи файл містить дані за останні 25 днів і чи не старший він
-                if (dayDiff > 0 && dayDiff <= daysToCheck) {
-                    files.push_back(prevFolderName + "/" + fileName);
-                }
-                entry.close();
-            }
-            dir.close();
-        }
-    }
-
+std::vector<String> findFilesForLastDays(int daysToCheck) {
+  std::vector<String> files;
+  if (!sDIsOk()) {
     return files;
+  }
+  time_t currentTime = timeClient.getEpochTime();  // Отримуємо поточний UNIX-час
+
+  // Отримуємо поточний місяць і рік
+  String currentMonth = getFormattedDate().substring(5, 7);
+  String currentYear = getFormattedDate().substring(0, 4);
+
+  // Перевіряємо поточний місяць
+  String folderName = "/" + currentMonth + "_" + currentYear;
+  if (SD.exists(folderName)) {
+    File dir = SD.open(folderName);
+    while (true) {
+      File entry = dir.openNextFile();
+      if (!entry) break;
+
+      String fileName = entry.name();
+      tmElements_t fileDate = parseDate(fileName.substring(0, 10));  // Парсимо дату з імені файлу
+      time_t fileTime = makeTime(fileDate);                          // Перетворюємо у UNIX-час
+
+      int dayDiff = (currentTime - fileTime) / SECS_PER_DAY;  // Обчислюємо різницю у днях
+      // Перевіряємо, чи файл знаходиться між поточною датою (не включаючи) та 25 днями назад (включно)
+      if (dayDiff > 0 && dayDiff <= 25) {              // Поточний день виключено
+        files.push_back(folderName + "/" + fileName);  // Додаємо файл до списку
+      }
+      entry.close();
+    }
+    dir.close();
+  }
+
+  // Якщо у поточному місяці не вистачає днів, переходимо до попереднього
+  int remainingDays = daysToCheck - files.size();
+  if (remainingDays > 0) {
+    int prevMonth = currentMonth.toInt() - 1;
+    int prevYear = currentYear.toInt();
+
+    // Якщо це січень, переходимо на попередній рік
+    if (prevMonth == 0) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+
+    // Формуємо назву попередньої папки
+    String prevFolderName = "/" + (prevMonth < 10 ? "0" + String(prevMonth) : String(prevMonth)) + "_" + String(prevYear);
+
+    if (SD.exists(prevFolderName)) {
+      File dir = SD.open(prevFolderName);
+      while (true) {
+        File entry = dir.openNextFile();
+        if (!entry) break;
+
+        String fileName = entry.name();
+        tmElements_t fileDate = parseDate(fileName.substring(0, 10));
+        time_t fileTime = makeTime(fileDate);
+        int dayDiff = (currentTime - fileTime) / SECS_PER_DAY;
+
+        // Перевіряємо, чи файл містить дані за останні 25 днів і чи не старший він
+        if (dayDiff > 0 && dayDiff <= daysToCheck) {
+          files.push_back(prevFolderName + "/" + fileName);
+        }
+        entry.close();
+      }
+      dir.close();
+    }
+  }
+
+  return files;
 }
 
 
 // Функція для пошуку перших 4 файлів за днями тижня, в межах 25 днів
 std::vector<String> findFilesByDayOfWeek(String dayOfWeek) {
-    std::vector<String> files;
-    int daysToCheck = 25;  // Максимум 25 днів для перевірки
-
-    // Перший пошук у поточному місяці
-    String currentMonth = getFormattedDate().substring(5, 7);    // Отримуємо поточний місяць (MM)
-    String currentYear = getFormattedDate().substring(0, 4);     // Отримуємо поточний рік (YYYY)
-    String folderName = "/" + currentMonth + "_" + currentYear;  // Папка формату mm_yyyy
-    Serial.print(folderName);
-    if (SD.exists(folderName)) {
-        File dir = SD.open(folderName);
-        while (true) {
-            File entry = dir.openNextFile();
-            if (!entry) break;
-
-            String fileName = entry.name();
-            Serial.print(fileName);
-            Serial.print(getDayOfWeekFromFileName(fileName));
-            if (getDayOfWeekFromFileName(fileName) == dayOfWeek) {
-                files.push_back(folderName + "/" + fileName);
-            }
-            entry.close();
-
-            if (files.size() >= 4) break;
-        }
-        dir.close();
-    }
-
-    // Якщо не вистачає файлів у поточному місяці, перевіряємо попередній місяць
-    if (files.size() < 4) {
-        int prevMonth = currentMonth.toInt() - 1;
-        int prevYear = currentYear.toInt();
-
-        // Якщо це січень, переходимо на попередній рік
-        if (prevMonth == 0) {
-            prevMonth = 12;
-            prevYear -= 1;
-        }
-
-        String prevFolderName = "/" + (prevMonth < 10 ? "0" + String(prevMonth) : String(prevMonth)) + "_" + String(prevYear);
-
-        if (SD.exists(prevFolderName)) {
-            File dir = SD.open(prevFolderName);
-            while (true) {
-                File entry = dir.openNextFile();
-                if (!entry) break;
-
-                String fileName = entry.name();
-                if (getDayOfWeekFromFileName(fileName) == dayOfWeek) {
-                    // Перевіряємо, чи не старіший цей файл більше ніж на 25 днів
-                    tmElements_t fileDate = parseDate(fileName.substring(0, 10));
-                    time_t fileTime = makeTime(fileDate);
-                    time_t currentTime = now();
-                    int dayDiff = (currentTime - fileTime) / SECS_PER_DAY;
-                    if (dayDiff <= 25) {
-                        files.push_back(prevFolderName + "/" + fileName);
-                    }
-                }
-                entry.close();
-
-                if (files.size() >= 4) break;
-            }
-            dir.close();
-        }
-    }
-
+  std::vector<String> files;
+  if (!sDIsOk()) {
     return files;
-}
+  }
+  int daysToCheck = 25;  // Максимум 25 днів для перевірки
 
+  // Перший пошук у поточному місяці
+  String date = getFormattedDate();
+  String dayInFormat = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";
+  String currentMonth = getFormattedDate().substring(5, 7);    // Отримуємо поточний місяць (MM)
+  String currentYear = getFormattedDate().substring(0, 4);     // Отримуємо поточний рік (YYYY)
+  String folderName = "/" + currentMonth + "_" + currentYear;  // Папка формату mm_yyyy
+  if (SD.exists(folderName)) {
+    File dir = SD.open(folderName);
+    while (true) {
+      File entry = dir.openNextFile();
+      if (!entry) break;
+
+      String fileName = entry.name();
+      if (getDayOfWeekFromFileName(fileName) == dayOfWeek && dayInFormat != fileName) {
+        files.push_back(folderName + "/" + fileName);
+      }
+      entry.close();
+
+      if (files.size() >= 4) break;
+    }
+    dir.close();
+  }
+  // Якщо не вистачає файлів у поточному місяці, перевіряємо попередній місяць
+  if (files.size() < 4) {
+    int prevMonth = currentMonth.toInt() - 1;
+    int prevYear = currentYear.toInt();
+
+    // Якщо це січень, переходимо на попередній рік
+    if (prevMonth == 0) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+
+    String prevFolderName = "/" + (prevMonth < 10 ? "0" + String(prevMonth) : String(prevMonth)) + "_" + String(prevYear);
+
+    if (SD.exists(prevFolderName)) {
+      File dir = SD.open(prevFolderName);
+      while (true) {
+        File entry = dir.openNextFile();
+        if (!entry) break;
+
+        String fileName = entry.name();
+        if (getDayOfWeekFromFileName(fileName) == dayOfWeek) {
+          // Перевіряємо, чи не старіший цей файл більше ніж на 25 днів
+          tmElements_t fileDate = parseDate(fileName.substring(0, 10));
+          time_t fileTime = makeTime(fileDate);
+          time_t currentTime = timeClient.getEpochTime();
+          int dayDiff = (currentTime - fileTime) / SECS_PER_DAY;
+          if (dayDiff <= 25) {
+            files.push_back(prevFolderName + "/" + fileName);
+          }
+        }
+        entry.close();
+
+        if (files.size() >= 4) break;
+      }
+      dir.close();
+    }
+  }
+
+  return files;
+}
 
 // Функція для зчитування даних Modbus
 void readModbusData() {
@@ -306,37 +460,78 @@ String getFormattedDate() {
   return String(buffer);
 }
 
+String getTodayDataFilePathIfExist() {
+  String FileName = "";
+  String currentFileName = "";
+
+  String date = getFormattedDate();
+  String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                                  // /mm_yyyy
+  String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";  // dd-mm-yyyy.json
+  currentFileName = folderName + "/" + fileName;
+
+  if (SD.exists(folderName) && SD.exists(currentFileName)) {
+    return currentFileName;
+  }
+  return "";
+}
+
+String getTodayDataFileNameIfExist() {
+  String FileName = "";
+  String currentFileName = "";
+
+  String date = getFormattedDate();
+  String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                                  // /mm_yyyy
+  String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";  // dd-mm-yyyy.json
+  currentFileName = folderName + "/" + fileName;
+
+  if (SD.exists(folderName) && SD.exists(currentFileName)) {
+    return fileName;
+  }
+  return "";
+}
+
+bool sDIsOk() {
+  if (SD.begin(chipSelect)) {
+    SD_Status = "SD card initialization fine";
+    return true;
+  } else {
+    SD_Status = "SD card initialization failed!";
+    return false;
+  }
+}
+
 // Запис даних у JSON на SD-карту
 void writeDataToSD(String requestTime) {
+  if (!sDIsOk()) {
+    return;
+  }
+  fileParseStatus = "";
   currentFileName = "";
   fileStatus = "";
-  if (!SD.begin(chipSelect)) {
-    SD_Status = "SD card initialization failed!";
-    return;
-  } else {
-    SD_Status = "SD card initialization fine";
-  }
+
   // Оновлюємо назву файлу відповідно до дати
-  String date = getFormattedDate();                                                                             // Отримуємо дату у форматі yyyy-mm-dd
-  String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                                  // mm_yyyy
-  String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";  // dd-mm-yyyy.json
+  String date = getFormattedDate();
+  String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4); 
+  String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json"; 
 
   if (!SD.exists(folderName)) {
-    if (SD.mkdir(folderName)) {
-      fileParseStatus = "Folder created successfully";
-    } else {
+    if (!SD.mkdir(folderName)) {
       fileParseStatus = "Failed to create folder: " + folderName;
+      return;
     }
   }
 
   currentFileName = folderName + "/" + fileName;
 
-  // Перевіряємо існування файлу і створюємо його, якщо його нема
+  // Якщо файл не існує, створюємо новий
   if (!SD.exists(currentFileName)) {
     File file = SD.open(currentFileName, FILE_WRITE);
     if (file) {
-      file.print("[");  // Створюємо новий JSON масив
+      file.print("[");  // Створюємо початок JSON масиву
       file.close();
+    } else {
+      fileParseStatus = "Failed to create file";
+      return;
     }
   }
 
@@ -347,59 +542,35 @@ void writeDataToSD(String requestTime) {
     return;
   }
 
-  // Читаємо існуючий вміст файлу
-  String fileContent = "";
-  while (file.available()) {
-    fileContent += char(file.read());
-  }
+  // Читаємо лише кінець файлу, щоб перевірити, чи вже є дані, і чи потрібно додати новий елемент
+  file.seek(file.size() - 1);  // Переходимо до кінця файлу
+  char lastChar = file.read();
   file.close();
 
-  // Парсимо JSON з файлу
-  DynamicJsonDocument doc(1024);
-  DeserializationError error = deserializeJson(doc, fileContent);
-  if (error) {
-    // Якщо не вдалося зчитати дані, вважаємо, що файл пустий
-    fileParseStatus = "Failed to parse JSON. Treating file as empty.";
-    doc.clear();  // Очищаємо документ для подальшого використання
-  }
-
-  JsonArray dataArray;
-  if (doc.is<JsonArray>()) {
-    dataArray = doc.as<JsonArray>();
-  } else {
-    dataArray = doc.to<JsonArray>();
-  }
-
-  // Перевіряємо наявність запису з таким же значенням часу
-  bool recordFound = false;
-  for (JsonObject record : dataArray) {
-    if (record["Time"] == requestTime) {
-      // Оновлюємо існуючий запис
-      record["PowerConsumption"] = powerConsumption;
-      record["solarGeneration"] = solarGeneration;
-      recordFound = true;
-      break;
-    }
-  }
-
-  // Якщо запис не знайдено, додаємо новий
-  if (!recordFound) {
-    JsonObject newRecord = dataArray.createNestedObject();
-    newRecord["Time"] = requestTime;
-    newRecord["PowerConsumption"] = powerConsumption;
-    newRecord["SolarGeneration"] = solarGeneration;
-  }
-
-  // Записуємо оновлений JSON у файл
+  // Відкриваємо файл для запису в кінець
   file = SD.open(currentFileName, FILE_WRITE);
   if (!file) {
     fileStatus = "Failed to open file for writing";
     return;
   }
 
-  file.seek(0);  // Повертаємось на початок файлу для перезапису
-  serializeJson(dataArray, file);
-  file.print("]");  // Закриваємо JSON масив
+  // Якщо файл пустий або закритий, додаємо новий елемент
+  if (lastChar == ']') {
+    file.seek(file.size() - 1);  // Видаляємо закриваючу дужку
+    file.print(",");  // Додаємо кому перед новим елементом
+  }
+
+  // Додаємо новий елемент у JSON масив
+  DynamicJsonDocument doc(256);
+  JsonObject newRecord = doc.to<JsonObject>();
+  newRecord["Time"] = requestTime;
+  newRecord["PowerConsumption"] = powerConsumption;
+  newRecord["SolarGeneration"] = solarGeneration;
+
+  // Записуємо новий елемент
+  serializeJson(newRecord, file);
+  file.print("]");  // Закриваємо масив
+
   file.close();
 
   fileStatus = "Data written to SD card";
@@ -407,59 +578,51 @@ void writeDataToSD(String requestTime) {
 
 
 void setupWebServer() {
+  // Головна сторінка: Завантаження з SD-карти або повернення до стандартного варіанту
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String html = "<form action='/save' method='POST'>"
-                  "<label>WiFi SSID:</label><input type='text' name='ssid' value='"
-                  + String(wifiSSID) + "'><br>"
-                                       "<label>WiFi Password:</label><input type='password' name='password' value='"
-                  + String(wifiPassword) + "'><br>"
-                                           "<input type='submit' value='Save'></form><br>"
-                                           "<button onclick=\"window.location.href='/start_ap'\">Start Access Point</button><br>"
-                                           "<button onclick=\"window.location.href='/connect_wifi'\">Connect to WiFi</button><br>"
-                                           "<button onclick=\"window.location.href='/sync_time'\">Synchronize Time</button><br>"
-                                           "<button onclick=\"window.location.href='/start_work'\">Start Work</button><br>"
-                                           "<button onclick=\"window.location.href='/stop_work'\">Stop Work</button><br>"
-                                           "<button onclick=\"window.location.href='/getFiles'\">getFiles</button><br>"
-                                           "<label>SD Status: "
-                  + String(SD_Status) + "</label><br>"
-                  "<label>SD isWorking: "
-                  + String(isWorking) + "</label><br>"
-                                        "<label>WiFi status: "
-                  + String(Wifi_status) + "</label><br>"
-                                          "<label>Current FileName: "
-                  + String(currentFileName) + "</label><br>"
-                                              "<label>Current fileStatus: "
-                  + String(fileStatus) + "</label><br>"
-                                         "<label>fileParseStatus: "
-                  + String(fileParseStatus) + "</label><br>"
-                                              "<p>Current Time: "
-                  + getFormattedDate() + " " + timeClient.getFormattedTime() + "</p>"
-                                                                               "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>";
-    request->send(200, "text/html", html);
+    if (SD.begin(chipSelect)) {
+      File file = SD.open("/web/index.html");
+      if (file) {
+        request->send(SD, "/web/index.html", "text/html");
+        file.close();
+        // Якщо файл не знайдено, повертаємо старий варіант сторінки
+        String html = "<form action='/save' method='POST'>"
+                      "<label>WiFi SSID:</label><input type='text' name='ssid' value='"
+                      + String(wifiSSID) + "'><br>"
+                                           "<label>WiFi Password:</label><input type='password' name='password' value='"
+                      + String(wifiPassword) + "'><br>"
+                                               "<input type='submit' value='Save'></form><br>"
+                                               "<button onclick=\"window.location.href='/start_ap'\">Start Access Point</button><br>"
+                                               "<button onclick=\"window.location.href='/connect_wifi'\">Connect to WiFi</button><br>"
+                                               "<button onclick=\"window.location.href='/sync_time'\">Synchronize Time</button><br>"
+                                               "<button onclick=\"window.location.href='/start_work'\">Start Work</button><br>"
+                                               "<button onclick=\"window.location.href='/stop_work'\">Stop Work</button><br>"
+                                               "<button onclick=\"window.location.href='/getFiles'\">getFiles</button><br>"
+                                               "<label>SD Status: "
+                      + String(SD_Status) + "</label><br>"
+                                            "<label>SD isWorking: "
+                      + String(isWorking) + "</label><br>"
+                                            "<label>WiFi status: "
+                      + String(Wifi_status) + "</label><br>"
+                                              "<label>Current FileName: "
+                      + String(currentFileName) + "</label><br>"
+                                                  "<label>Current fileStatus: "
+                      + String(fileStatus) + "</label><br>"
+                                                 "<label>fileParseStatus: "
+                      + String(fileParseStatus) + "</label><br>"
+                                                  "<p>Current Time: "
+                      + getFormattedDate() + " " + timeClient.getFormattedTime() + "</p>"
+                                                                                   "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>";
+        request->send(200, "text/html", html);
+      }
+      }
+    
   });
 
-  server.on("/getFiles", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String html = "<html><body>";
-    html += "<h1>ESP32 SD Card Status</h1>";
-    html += "<p>SD Card Status: " + SD_Status + "</p>";
+  // Сервер для завантаження CSS та JS з SD-карти
+  server.serveStatic("/css/", SD, "/web/css/");
+  server.serveStatic("/js/", SD, "/web/js/");
 
-    // Додано: пошук файлів за неділю
-    std::vector<String> sundayFiles = findFilesByDayOfWeek("Sunday");
-    html += "<h2>Files for Sunday:</h2><ul>";
-    for (const auto &file : sundayFiles) {
-      html += "<li>" + file + "</li>";
-    }
-    html += "</ul>";
-
-    // Інші елементи сторінки
-    html += "<p>WiFi Status: " + Wifi_status + "</p>";
-    html += "<p><a href=\"/sync\">Synchronize Time</a></p>";
-    html += "<p><a href=\"/start\">Start Work</a></p>";
-    html += "<p><a href=\"/stop\">Stop Work</a></p>";
-    html += "</body></html>";
-
-    request->send(200, "text/html", html);
-  });
   // Додавання маршруту для перегляду статусу SD-карти та поточних даних
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
     String html = "<h2>Current Data</h2>";
@@ -514,11 +677,17 @@ void setupWebServer() {
   });
 
   server.on("/start_work", HTTP_GET, [](AsyncWebServerRequest *request) {
+    preferences.begin("wifi-settings", false);
+    preferences.putBool("isWorking", true);  // Точка доступу
+    preferences.end();
     isWorking = true;
     request->send(200, "text/html", "Started Modbus reading and data logging.");
   });
 
   server.on("/stop_work", HTTP_GET, [](AsyncWebServerRequest *request) {
+    preferences.begin("wifi-settings", false);
+    preferences.putBool("isWorking", false);  // Точка доступу
+    preferences.end();
     isWorking = false;
     request->send(200, "text/html", "Stopped Modbus reading and data logging.");
   });
@@ -550,6 +719,8 @@ void setupWebServer() {
 }
 
 
+
+
 void startAccessPoint() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP(apSSID, apPassword);
@@ -573,22 +744,8 @@ void ledTask(void *parameter) {
   ledStopFlag = true;
   vTaskDelete(NULL);
 }
-// Функція для повернення назви дня тижня
-String getDayOfWeek(int dayIndex) {
-  switch (dayIndex) {
-    case 1: return "Sunday";
-    case 2: return "Monday";
-    case 3: return "Tuesday";
-    case 4: return "Wednesday";
-    case 5: return "Thursday";
-    case 6: return "Friday";
-    case 7: return "Saturday";
-    default: return "";
-  }
-}
-void loop() {
 
-  // Перевіряємо час для зчитування Modbus даних
+void getInfoFromInvertor() {
   if (isWorking && timeSynced && timeClient.getSeconds() == 0) {
     int hours = timeClient.getHours();
     int minutes = timeClient.getMinutes();
@@ -596,6 +753,11 @@ void loop() {
     readModbusData();
     writeDataToSD(time);
   }
+}
+
+void loop() {
+  getInfoFromInvertor();
+  // Перевіряємо час для зчитування Modbus даних
 }
 
 
