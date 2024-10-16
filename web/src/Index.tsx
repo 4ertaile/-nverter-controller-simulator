@@ -62,18 +62,7 @@ type Opts = {
 
 const App: React.FC = () => {
 
-    const [opts,setOpts] = React.useState<Opts | null>(null);
-
-    (async () => {
-        let resp = await fetch('/options', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        let data = await resp.json();
-        setOpts(data);
-    })();
+    const { data: opts } = useSWR<Opts>('/options');
 
     const { data: status } = useSWR<Status>('/status');
 
