@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { makeOnLoad } from './lib';
 
 import useSWR from 'swr';
 
 import styled from 'styled-components';
+import { useForm } from 'react-hook-form';
 
 const TextLabel = styled.label`
     font-size: 20px;
@@ -52,23 +53,58 @@ type Status = {
     powerConsumption: number,
 }
 
-type Opts = {
-    wifiSSID: string;
-    wifiPassword: string;
-    apiKey: string;
-    latitude: number;
-    longitude: number;
+type WifiForm = {
+    ssid: string;
+    password: string;
 }
+
+type WeatherForm = {
+    apiKey: string;
+    latitude: string;
+    longitude: string;
+}
+
+const REFETCH_INTERVAL = 2000; //ms
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 const App: React.FC = () => {
 
-    const { data: opts } = useSWR<Opts>('/options',fetcher);
+    const wifiForm = useForm<WifiForm>({
+        defaultValues: {
+            ssid: '',
+            password: ''
+        }
+    });
 
-    const { data: status } = useSWR<Status>('/status', fetcher);
+    const weatherForm = useForm<WeatherForm>({
+        defaultValues: {
+            apiKey: '',
+            latitude: '',
+            longitude: ''
+        }
+    });
 
-    console.log(opts,status);
+    useEffect(() => {
+        (async () => {
+            let response = await fetch('/options');
+            let data = await response.json();
+
+            wifiForm.reset({
+                ssid: data.ssid,
+                password: data.password
+            });
+            weatherForm.reset({
+                apiKey: data.apiKey,
+                latitude: data.latitude,
+                longitude: data.longitude
+            });
+        })();
+    },[]);
+
+    const { data: status } = useSWR<Status>('/status', fetcher, { refreshInterval: REFETCH_INTERVAL });
+
+    console.log(status);
     
     const send_patch = (url: string) => async () => {
         let response = await fetch(url, {
@@ -80,26 +116,47 @@ const App: React.FC = () => {
         }
     };
 
+    const send_post = (url: string) => async (data: any) => {
+        const queryParams = new URLSearchParams(data).toString();
+        const urlWithParams = `${url}?${queryParams}`;
+
+        let response = await fetch(urlWithParams, {
+            method: 'POST',
+        });
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+    }
+
+    // fix wifi form (populate)
+
+    // add file display
+
     return (
         <div>
-            {opts && (<FlexRow>
-                <Form action='/saveWifi' method='POST'>
+            <FlexRow>
+                <Form onSubmit={
+                    wifiForm.handleSubmit(send_post('/saveWifi'))
+                }>
                     <TextLabel>WiFi SSID:</TextLabel>
-                    <SInput type='text' name='ssid' value={opts.wifiSSID} /><br />
+                    <SInput type='text' {...wifiForm.register("ssid")} /><br />
                     <TextLabel>WiFi Password:</TextLabel>
-                    <SInput type='password' name='password' value={opts.wifiPassword} /><br />
+                    <SInput type='password' {...wifiForm.register("password")} /><br />
                     <SInput type='submit' value='Save' />
                 </Form>
-                <Form action='/saveWeather' method='POST'>
+                <Form onSubmit={
+                    wifiForm.handleSubmit(send_post('/saveWeather'))
+                }>
                     <TextLabel>ApiKey:</TextLabel>
-                    <SInput type='text' name='apiKey' value={opts.apiKey} /><br />
+                    <SInput type='text' {...weatherForm.register("apiKey")} /><br />
                     <TextLabel>Latitude:</TextLabel>
-                    <SInput name='latitude' value={opts.latitude} /><br />
+                    <SInput {...weatherForm.register("latitude")} /><br />
                     <TextLabel>Longitude:</TextLabel>
-                    <SInput name='longitude' value={opts.longitude} /><br />
+                    <SInput {...weatherForm.register("longitude")} /><br />
                     <SInput type='submit' value='Save' />
                 </Form>
-            </FlexRow>)}
+            </FlexRow>
 
             <FlexRow>
                 <div>
@@ -117,13 +174,12 @@ const App: React.FC = () => {
                     <TextLabel>Current FileName: {status.currentFileName}</TextLabel><br />
                     <TextLabel>Current fileStatus: {status.fileStatus}</TextLabel><br />
                     <TextLabel>fileParseStatus: {status.fileParseStatus}</TextLabel><br />
-                    
-                    <TextLabel>Current Time: {status.time}</TextLabel>
-                    <TextLabel>Temperature: {status.temperature}</TextLabel>
+                    <TextLabel>Current Time: {status.time}</TextLabel><br />
+                    <TextLabel>Temperature: {status.temperature}</TextLabel><br />
+                    <TextLabel>Cloudiness: {status.cloudiness}</TextLabel><br />
 
-                    <TextLabel>Cloudiness: {status.cloudiness}</TextLabel>
-                    <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel>
-                    <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel>
+                    <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
+                    <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
                 </div>)}
             </FlexRow>
         </div>
