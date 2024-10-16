@@ -1,6 +1,8 @@
 import React from 'react';
 import { makeOnLoad } from './lib';
 
+import useSWR from 'swr';
+
 import styled from 'styled-components';
 
 const TextLabel = styled.label`
@@ -73,19 +75,7 @@ const App: React.FC = () => {
         setOpts(data);
     })();
 
-    const [status,setStatus] = React.useState<Status | null>(null);
-
-    window.setInterval(async () => {
-        // setStatus(null);
-        let resp = await fetch('/status', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        let data = await resp.json();
-        setStatus(data);
-    }, 2000); //2s
+    const { data: status } = useSWR<Status>('/status');
 
     const send_patch = (url: string) => async () =>{
         let response = await fetch(url, {
