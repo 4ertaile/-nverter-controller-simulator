@@ -66,9 +66,10 @@ const App: React.FC = () => {
 
     const { data: opts } = useSWR<Opts>('/options',fetcher);
 
-    const { data: status } = useSWR<Status>('/status');
+    const { data: status } = useSWR<Status>('/status', fetcher);
 
     console.log(opts,status);
+    
     const send_patch = (url: string) => async () => {
         let response = await fetch(url, {
             method: 'PATCH',
@@ -107,7 +108,6 @@ const App: React.FC = () => {
                     <ActionButton onClick={send_patch('/sync_time')}>Synchronize Time</ActionButton><br />
                     <ActionButton onClick={send_patch('/start_work')}>Start Work</ActionButton><br />
                     <ActionButton onClick={send_patch('/stop_work')}>Stop Work</ActionButton><br />
-                    ?????
                     <ActionButton onClick={send_patch('/getFiles')}>getFiles</ActionButton><br />
                 </div>
                 {status && (<div>
