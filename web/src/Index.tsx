@@ -64,6 +64,10 @@ type WeatherForm = {
     longitude: string;
 }
 
+type Files = {
+    name: string;
+}[]
+
 const REFETCH_INTERVAL = 2000; //ms
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
@@ -104,7 +108,8 @@ const App: React.FC = () => {
 
     const { data: status } = useSWR<Status>('/status', fetcher, { refreshInterval: REFETCH_INTERVAL });
 
-    console.log(status);
+    const { data: files } = useSWR<Files>('/files', fetcher, { refreshInterval: REFETCH_INTERVAL });
+
     
     const send_patch = (url: string) => async () => {
         let response = await fetch(url, {
@@ -130,8 +135,6 @@ const App: React.FC = () => {
     }
 
     // fix wifi form (populate)
-
-    // add file display
 
     return (
         <div>
@@ -165,7 +168,6 @@ const App: React.FC = () => {
                     <ActionButton onClick={send_patch('/sync_time')}>Synchronize Time</ActionButton><br />
                     <ActionButton onClick={send_patch('/start_work')}>Start Work</ActionButton><br />
                     <ActionButton onClick={send_patch('/stop_work')}>Stop Work</ActionButton><br />
-                    <ActionButton onClick={send_patch('/getFiles')}>getFiles</ActionButton><br />
                 </div>
                 {status && (<div>
                     <TextLabel>SD Status: {status.sdStatus}</TextLabel><br />
@@ -181,6 +183,16 @@ const App: React.FC = () => {
                     <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
                     <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
                 </div>)}
+
+                {files && 
+                    <FlexRow>{
+                        files.map(
+                            ({name}) => (<React.Fragment key={name}>
+                                <TextLabel>{name}</TextLabel><br />
+                            </React.Fragment>)
+                        )    
+                    }</FlexRow>
+                }
             </FlexRow>
         </div>
     );
