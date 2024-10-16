@@ -115,14 +115,14 @@ void setup() {
   ledStopFlag = false;
   xTaskCreate(ledTask, "LED Blink Task", 1024, NULL, 1, &ledTaskHandle);
   //delete this
-  std::vector<String> filePaths = { "/09_2024/18-09-2024.json", "/09_2024/23-09-2024.json" };
-  String searchTime = "12:05:00";
+  // std::vector<String> filePaths = { "/09_2024/18-09-2024.json", "/09_2024/23-09-2024.json" };
+  // String searchTime = "12:05:00";
 
-  EnergyData averageData = processFilesAndGetAverage(filePaths, searchTime);
+  // EnergyData averageData = processFilesAndGetAverage(filePaths, searchTime);
 
-  Serial.println("Time: " + averageData.Time);
-  Serial.println("Average Power Consumption: " + String(averageData.PowerConsumption));
-  Serial.println("Average Solar Generation: " + String(averageData.SolarGeneration));
+  // Serial.println("Time: " + averageData.Time);
+  // Serial.println("Average Power Consumption: " + String(averageData.PowerConsumption));
+  // Serial.println("Average Solar Generation: " + String(averageData.SolarGeneration));
 
 }
 // Функція для повернення назви дня тижня
@@ -801,21 +801,20 @@ void setupWebServer() {
     request->send(200, "text/html", html);
   });
 
-  server.on("/getFiles", HTTP_GET, [](AsyncWebServerRequest *request) {
+
+server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
+    DynamicJsonDocument doc(1024);
     std::vector<String> files = findFilesForLastDays(25);
-    String filesArray = "[";
-    for (int i = 0; i < files.size(); i++) {
-      filesArray += "{\"fname\": \"" + files[i] + "\", \"date\": \"" + getDayOfWeekFromFileName(files[i]) + "\"}";
-      if (i != files.size() - 1) {
-        filesArray += ",";
-      }
+    // Додаємо всі файли у JSON-масив
+    JsonArray jsonArray = doc.to<JsonArray>();
+    for (const String& file : files) {
+        jsonArray.add(file);
     }
-    filesArray += "]";
 
-    String time = "\"" + getFormattedDate() + "\"";
-
-    String JsonData = "{\"files\": " + filesArray + "," + "\"time\": " + time + "}";
-    request->send(200, "application/json", JsonData);
+    // Перетворюємо JSON-документ у строку
+    String jsonData;
+    serializeJson(doc, jsonData);
+    request->send(200, "application/json", jsonData);
   });
 
   // Сервер для завантаження files з SD-карти
@@ -991,15 +990,7 @@ void getInfoFromInvertor() {
 
 void loop() {
   getInfoFromInvertor();
-  // std::vector<String> files = findFilesForLastDays(25);
-  // std::vector<String> fil1 = findFilesByDayOfWeek("Sunday");
-  //   for (const auto &file : files) {
-  //        Serial.println(file);
-  //   }
 
-  // for(const auto &file : fil1){
-  //        Serial.println(file);
-  // }
 
   // Перевіряємо час для зчитування Modbus даних
 }
