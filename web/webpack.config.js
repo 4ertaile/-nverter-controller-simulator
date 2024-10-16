@@ -16,10 +16,6 @@ module.exports = {
       dependOn: 'shared',
       import: './src/Index.tsx',
     },
-    files: {
-      dependOn: 'shared',
-      import: './src/Files.tsx',
-    },
   },
   output: {
     path: path.resolve(__dirname, '../static'),
