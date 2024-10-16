@@ -60,14 +60,16 @@ type Opts = {
     longitude: number;
 }
 
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
 const App: React.FC = () => {
 
-    const { data: opts } = useSWR<Opts>('/options');
+    const { data: opts } = useSWR<Opts>('/options',fetcher);
 
     const { data: status } = useSWR<Status>('/status');
 
     console.log(opts,status);
-    const send_patch = (url: string) => async () =>{
+    const send_patch = (url: string) => async () => {
         let response = await fetch(url, {
             method: 'PATCH',
         });
