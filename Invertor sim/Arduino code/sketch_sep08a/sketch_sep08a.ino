@@ -632,22 +632,52 @@ void writeDataToSD(String requestTime) {
 
 String makeIndexFile(String chunk) {
   String chunkUrl = "/static/" + chunk;
+  if(sDIsOk() && SD.open("/static/index.js")){
+  return "<!DOCTYPE html>"
+      "<html lang=\"en\">"
+      "<head>"
+        "<meta charset=\"utf-8\" />"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />"
+        "<title>The invertor controller</title>"
+        "<script src=\"/static/shared.js\"></script>"
+      "</head>"
+      "<body style=\"display: block;\">"
+        "<script src=" + chunkUrl + "></script>"
+        "<div id=\"app\"></div>"
+      "</body>"
+      "</html>";
+  }
+  String html = "<form action='/saveWifi' method='POST'>"
+                      "<label>WiFi SSID:</label><input type='text' name='ssid' value='"+ String(wifiSSID) + "'><br>"
+                      "<label>WiFi Password:</label><input type='password' name='password' value='"+ String(wifiPassword) + "'><br>"
+                      "<input type='submit' value='Save'></form><br>"
+                      "<form action='/saveWeather' method='POST'>"
+                      "<label>ApiKey:</label><input type='text' name='apiKey' value='"+ String(apiKey) + "'><br>"
+                      "<label>Latitude:</label><input  name='latitude' value='"+ String(latitude) + "'><br>"
+                      "<label>Longitude:</label><input  name='longitude' value='"+ String(longitude) + "'><br>"
+                      "<input type='submit' value='Save'></form><br>"
+                      "<button onclick=\"window.location.href='/start_ap'\">Start Access Point</button><br>"
+                      "<button onclick=\"window.location.href='/connect_wifi'\">Connect to WiFi</button><br>"
+                      "<button onclick=\"window.location.href='/sync_time'\">Synchronize Time</button><br>"
+                      "<button onclick=\"window.location.href='/start_work'\">Start Work</button><br>"
+                      "<button onclick=\"window.location.href='/stop_work'\">Stop Work</button><br>"
+                      "<label>SD Status: "
+                       + String(SD_Status) + "</label><br>"
+                      "<label>SD isWorking: "
+                       + String(isWorking) + "</label><br>"
+                      "<label>WiFi status: "
+                       + String(Wifi_status) + "</label><br>"
+                      "<label>Current FileName: "
+                       + String(currentFileName) + "</label><br>"
+                      "<label>Current fileStatus: "
+                       + String(fileStatus) + "</label><br>"
+                        "<label>fileParseStatus: "
+                       + String(fileParseStatus) + "</label><br>"
+                         "<p>Current Time: "
+                       + getFormattedDate() + " " + timeClient.getFormattedTime() + "</p>"
+                       "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>";
+   return html;
 
-  String html = "
-      <!DOCTYPE html>
-      <html lang=\"en\">
-      <head>
-        <meta charset=\"utf-8\" />
-        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
-        <title>The invertor controller</title>
-        <script src=\"/static/shared.js\"></script>
-      </head>
-      <body style=\"display: block;\">
-        <script src=" + chunkUrl + "></script>
-        <div id=\"app\"></div>
-      </body>
-      </html>
-    ";
 }
 
 void setupWebServer() {
@@ -663,7 +693,7 @@ void setupWebServer() {
     request->send(200, "text/html", html);
   });
 
-  server.on("/getFiles", HTTP_GET, [](AsyncWebServerRequest *request)) {
+  server.on("/getFiles", HTTP_GET, [](AsyncWebServerRequest *request) {
     std::vector<String> files = findFilesForLastDays(25);
     String filesArray = "[";
     for (int i = 0; i < files.size(); i++) {
@@ -678,7 +708,7 @@ void setupWebServer() {
 
     String JsonData = "{\"files\": " + filesArray + "," + "\"time\": " + time + "}";
     request->send(200, "application/json", JsonData);
-  }
+  });
 
   // Сервер для завантаження files з SD-карти
 
@@ -722,40 +752,6 @@ void setupWebServer() {
     request->send(200, "application/json", jsonResponse);
   });
 
-  //{getFormattedDate()} {timeClient.getFormattedTime()}
-
-  // todo: make it return an actual status
-  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String html = "<h2>Current Data</h2>";
-    html += "<p>Solar Generation: " + String(solarGeneration) + " W</p>";
-    html += "<p>Power Consumption: " + String(powerConsumption) + " W</p>";
-
-    html += "<h2>SD Card Content</h2>";
-    if (!SD.begin(chipSelect)) {
-      html += "<p>SD card not initialized.</p>";
-    } else {
-      File root = SD.open("/");
-      if (!root) {
-        html += "<p>Failed to open SD card root directory.</p>";
-      } else {
-        html += "<ul>";
-        while (true) {
-          File entry = root.openNextFile();
-          if (!entry) {
-            // Більше немає файлів
-            break;
-          }
-          html += "<li>" + String(entry.name()) + " (" + entry.size() + " bytes)</li>";
-          entry.close();
-        }
-        html += "</ul>";
-      }
-      root.close();
-    }
-
-    request->send(200, "text/html", html);
-  });
-
   // Інші наявні маршрути
   server.on("/saveWifi", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
@@ -779,30 +775,6 @@ void setupWebServer() {
     }
   });
 
-  server.on("/getFiles", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String html = "<html><body>";
-    html += "<h1>ESP32 SD Card Status</h1>";
-    html += "<p>SD Card Status: " + SD_Status + "</p>";
-
-    // Додано: пошук файлів за днем тижня
-    std::vector<String> sundayFiles = findFilesByDayOfWeek(getDayOfWeekFromFileName(getTodayDataFileNameIfExist()));
-    html += "<h2>Files for " + String(getDayOfWeekFromFileName(getTodayDataFileNameIfExist())) + ":</h2><ul>";
-    for (const auto &file : sundayFiles) {
-      html += "<li>" + file + "</li>";
-    }
-    html += "</ul>";
-
-    // Додано: пошук файлів за днем тижня
-    std::vector<String> last25Files = findFilesForLastDays(25);
-    html += "<h2>Files for last 25 days:</h2><ul>";
-    for (const auto &file : last25Files) {
-      html += "<li>" + file + "</li>";
-    }
-    html += "</ul>";
-
-    request->send(200, "text/html", html);
-  });
-  
   server.on("/saveWeather", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (request->hasParam("apiKey", true) && request->hasParam("latitude", true) && request->hasParam("longitude", true)) {
       String NapiKey = request->getParam("apiKey", true)->value();
