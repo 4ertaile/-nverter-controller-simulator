@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form';
 
 const TextLabel = styled.label`
     font-size: 15px;
-    font-weight: bold;
+    /* font-weight: bold; */
     font-family: 'blankenburg';
 `;
 
@@ -33,6 +33,9 @@ const Form = styled.form`
     display: flex;
     flex-direction: column;
     align-items: center;
+    border: 2px solid #000;
+    margin-right: 0.5rem;
+    margin-left: 0.5rem;
 `;
 
 const FlexRow = styled.div`
@@ -64,9 +67,11 @@ const FlexCol = styled.div`
 
 const CenteredContainer = styled.div`
     display: flex;
-    justify-content: center;
+    justify-content: start;
     align-items: center;
-    height: 100vh;
+    overflow-y: scroll;
+
+    /* height: 100vh; */
     width: 100vw;
 `;
 
