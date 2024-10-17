@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { makeOnLoad } from './lib';
 
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 
 import styled from 'styled-components';
 import { useForm } from 'react-hook-form';
@@ -91,22 +91,36 @@ const App: React.FC = () => {
         }
     });
 
+    // useSWR with options to disable automatic revalidation
+    const { data: opts } = useSWR('/options', fetcher, {
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
+        refreshInterval: 0
+    });
+
+    // Function to manually revalidate
+    const revalidate = () => {
+        mutate('/options');
+    };
+
     useEffect(() => {
         (async () => {
-            let response = await fetch('/options');
-            let data = await response.json();
+            if (!opts) {
+                return;
+            }
 
             wifiForm.reset({
-                ssid: data.ssid,
-                password: data.password
+                ssid: opts.ssid,
+                password: opts.password
             });
+            
             weatherForm.reset({
-                apiKey: data.apiKey,
-                latitude: data.latitude,
-                longitude: data.longitude
+                apiKey: opts.apiKey,
+                latitude: opts.latitude,
+                longitude: opts.longitude
             });
         })();
-    },[]);
+    },[opts]);
 
     const { data: status } = useSWR<Status>('/status', fetcher, { refreshInterval: REFETCH_INTERVAL });
 
@@ -126,10 +140,10 @@ const App: React.FC = () => {
 
     //todo: fix this
     const send_post = (url: string) => async (data: any) => {
-        console.log(data," send to ",url);
-
         const queryParams = new URLSearchParams(data).toString();
         const urlWithParams = `${url}?${queryParams}`;
+
+        console.log(data," send to ",urlWithParams);
 
         let response = await fetch(urlWithParams, {
             method: 'POST',
@@ -138,6 +152,8 @@ const App: React.FC = () => {
         if (!response.ok) {
             throw new Error('Network response was not ok');
         }
+
+        revalidate();
     }
 
 
