@@ -7,12 +7,12 @@ import styled from 'styled-components';
 import { useForm } from 'react-hook-form';
 
 const TextLabel = styled.label`
-    font-size: 20px;
+    font-size: 15px;
     font-weight: bold;
 `;
 
 const ActionButton = styled.button`
-    font-size: 20px;
+    font-size: 15px;
     font-weight: bold;
 
     &:hover {
@@ -21,7 +21,7 @@ const ActionButton = styled.button`
 `;
 
 const SInput = styled.input`
-    font-size: 20px;
+    font-size: 15px;
     font-weight: bold;
     width: 200px;
 `;
@@ -39,7 +39,6 @@ const FlexRow = styled.div`
     justify-content: center;
     margin-top: 1rem;
     margin-left: 2rem;
-    border: 1px solid #000;
     padding: 1rem;
     hyphens: auto;
 `;
@@ -51,7 +50,10 @@ const FlexCol = styled.div`
     justify-content: center;
     margin-top: 1rem;
     margin-left: 2rem;
+
     border: 1px solid #000;
+    border-radius: 10%;
+
     padding: 1rem;
 `;
 
@@ -272,17 +274,6 @@ const App: React.FC = () => {
                         <SInput {...weatherForm.register("longitude")} /><br />
                         <SInput type='submit' value='Save' />
                     </Form>
-                    <Form onSubmit={
-                        invertorForm.handleSubmit(send_post('/saveInvertor'))
-                    }>
-                        <TextLabel>Invertor IP:</TextLabel>
-                        <SInput type='text' {...invertorForm.register("ip")} /><br />
-                        <TextLabel>Invertor Port:</TextLabel>
-                        <SInput type='text' {...invertorForm.register("port")} /><br />
-                        <TextLabel>Invertor ID:</TextLabel>
-                        <SInput type='text' {...invertorForm.register("id")} /><br />
-                        <SInput type='submit' value='Save' />
-                    </Form>
                 </FlexCol>
 
                 <FlexRow>
@@ -310,6 +301,20 @@ const App: React.FC = () => {
                         <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
                     </FlexCol>)}
                 </FlexRow>
+
+                <FlexCol>
+                    <Form onSubmit={
+                        invertorForm.handleSubmit(send_post('/saveInvertor'))
+                    }>
+                        <TextLabel>Invertor IP:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("ip")} /><br />
+                        <TextLabel>Invertor Port:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("port")} /><br />
+                        <TextLabel>Invertor ID:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("id")} /><br />
+                        <SInput type='submit' value='Save' />
+                    </Form>
+                </FlexCol>
 
                 {files &&  <FilesDisplay files={files}/>}
             </FlexRow>
