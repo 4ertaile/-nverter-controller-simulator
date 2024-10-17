@@ -55,6 +55,14 @@ const FlexCol = styled.div`
     padding: 1rem;
 `;
 
+const CenteredContainer = styled.div`
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+`;
+
 type Status = {
     sdStatus: string;
     isWorking: boolean;
@@ -86,11 +94,57 @@ type WeatherForm = {
     longitude: string;
 }
 
+type File = {
+    name: string;
+    // url: string;
+}
+
 type Files = {
-    [dir: string]: {
-        name: string;
-        // url: string;
-    }[];
+    [dir: string]: File[];
+}
+
+const FileDisplay = ({ file }: { file: File }) => {
+    return (
+        <div style={{ margin: '0.5rem 0', padding: '0.5rem', border: '1px solid #bdbdbd', borderRadius: '4px', backgroundColor: '#ffffff' }}>
+            <a href={`/file/${file.name}`} style={{ textDecoration: 'none', color: '#5a5a5a', fontWeight: 'bold' }}>
+                {file.name}
+            </a>
+        </div>
+    );
+}
+
+const FilesDisplay = ({ files }: { files: Files }) => {
+    const [selectedDir, setSelectedDir] = React.useState<string | null>(null);
+
+    useEffect(() => {
+        if (selectedDir && !Object.keys(files).includes(selectedDir)) {
+            setSelectedDir(null);
+        }
+    },[files]);
+
+    const selectedFiles = selectedDir ? files[selectedDir] : [];
+
+    return (
+        <div style={{ textAlign: 'center' }}>
+            <div style={{ marginBottom: '1rem' }}>
+                <select 
+                    onChange={(e) => setSelectedDir(e.target.value)} 
+                    value={selectedDir || ''} 
+                    style={{ padding: '0.5rem', fontSize: '16px', borderRadius: '4px', border: '1px solid #bdbdbd' }}
+                >
+                    <option value="" disabled>Select a directory</option>
+                    {Object.keys(files).map((dir) => (
+                        <option key={dir} value={dir}>{dir}</option>
+                    ))}
+                </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {selectedFiles.map(
+                    (file) => <FileDisplay key={file.name} file={file} />
+                )}
+            </div>
+        </div>
+    );
 }
 
 const REFETCH_INTERVAL = 2000; //ms
@@ -181,71 +235,60 @@ const App: React.FC = () => {
 
 
     return (
-        <FlexRow>
-            <FlexCol>
-                <Form onSubmit={
-                    wifiForm.handleSubmit(send_post('/saveWifi'))
-                }>
-                    <TextLabel>WiFi SSID:</TextLabel>
-                    <SInput type='text' {...wifiForm.register("ssid")} /><br />
-                    <TextLabel>WiFi Password:</TextLabel>
-                    <SInput type='password' {...wifiForm.register("password")} /><br />
-                    <SInput type='submit' value='Save' />
-                </Form>
-                <Form onSubmit={
-                    weatherForm.handleSubmit(send_post('/saveWeather'))
-                }>
-                    <TextLabel>ApiKey:</TextLabel>
-                    <SInput type='text' {...weatherForm.register("apiKey")} /><br />
-                    <TextLabel>Latitude:</TextLabel>
-                    <SInput {...weatherForm.register("latitude")} /><br />
-                    <TextLabel>Longitude:</TextLabel>
-                    <SInput {...weatherForm.register("longitude")} /><br />
-                    <SInput type='submit' value='Save' />
-                </Form>
-            </FlexCol>
-
+        <CenteredContainer>
             <FlexRow>
                 <FlexCol>
-                    <ActionButton onClick={send_patch('/start_ap')}>Start Access Point</ActionButton><br />
-                    <ActionButton onClick={send_patch('/connect_wifi')}>Connect to WiFi</ActionButton><br />
-                    <ActionButton onClick={send_patch('/sync_time')}>Synchronize Time</ActionButton><br />
-                    <ActionButton onClick={send_patch('/start_work')}>Start Work</ActionButton><br />
-                    <ActionButton onClick={send_patch('/stop_work')}>Stop Work</ActionButton><br />
+                    <Form onSubmit={
+                        wifiForm.handleSubmit(send_post('/saveWifi'))
+                    }>
+                        <TextLabel>WiFi SSID:</TextLabel>
+                        <SInput type='text' {...wifiForm.register("ssid")} /><br />
+                        <TextLabel>WiFi Password:</TextLabel>
+                        <SInput type='password' {...wifiForm.register("password")} /><br />
+                        <SInput type='submit' value='Save' />
+                    </Form>
+                    <Form onSubmit={
+                        weatherForm.handleSubmit(send_post('/saveWeather'))
+                    }>
+                        <TextLabel>ApiKey:</TextLabel>
+                        <SInput type='text' {...weatherForm.register("apiKey")} /><br />
+                        <TextLabel>Latitude:</TextLabel>
+                        <SInput {...weatherForm.register("latitude")} /><br />
+                        <TextLabel>Longitude:</TextLabel>
+                        <SInput {...weatherForm.register("longitude")} /><br />
+                        <SInput type='submit' value='Save' />
+                    </Form>
                 </FlexCol>
-                {status && (<FlexCol>
-                    <TextLabel>SD Status: {status.sdStatus}</TextLabel><br />
-                    <TextLabel>SD isWorking: {status.isWorking ? <>Yes</> : <>No</>}</TextLabel><br />
-                    <TextLabel>WiFi status: {status.wifiStatus}</TextLabel><br />
-                    <TextLabel>Current FileName: {status.currentFileName}</TextLabel><br />
-                    <TextLabel>Current fileStatus: {status.fileStatus}</TextLabel><br />
-                    <TextLabel>fileParseStatus: {status.fileParseStatus}</TextLabel><br />
-                    <TextLabel>Current Time: {status.time}</TextLabel><br />
-                    <TextLabel>Temperature: {status.temperature}</TextLabel><br />
-                    <TextLabel>Cloudiness: {status.cloudiness}</TextLabel><br />
-                    <TextLabel>Last Update Time: {status.lastUpdateTime}</TextLabel><br />
-                    <TextLabel>Weather Updated: {status.weatherUpdated}</TextLabel><br />
-                    <TextLabel>Weather Updated Status: {status.weatherUpdatedStatus}</TextLabel><br />
-                    <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
-                    <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
-                </FlexCol>)}
-            </FlexRow>
 
-            {files && 
-                <FlexCol>
-                    {Object.entries(files).map(([day, files]) => (
-                        <React.Fragment key={day}>
-                            <TextLabel>Day: {day}</TextLabel>
-                            {files.map((file) => (
-                                <div key={file.name}>
-                                    <TextLabel>File: {file.name}</TextLabel><br />
-                                </div>
-                            ))}
-                        </React.Fragment>
-                    ))}
-                </FlexCol>
-            }
-        </FlexRow>
+                <FlexRow>
+                    <FlexCol>
+                        <ActionButton onClick={send_patch('/start_ap')}>Start Access Point</ActionButton><br />
+                        <ActionButton onClick={send_patch('/connect_wifi')}>Connect to WiFi</ActionButton><br />
+                        <ActionButton onClick={send_patch('/sync_time')}>Synchronize Time</ActionButton><br />
+                        <ActionButton onClick={send_patch('/start_work')}>Start Work</ActionButton><br />
+                        <ActionButton onClick={send_patch('/stop_work')}>Stop Work</ActionButton><br />
+                    </FlexCol>
+                    {status && (<FlexCol>
+                        <TextLabel>SD Status: {status.sdStatus}</TextLabel><br />
+                        <TextLabel>SD isWorking: {status.isWorking ? <>Yes</> : <>No</>}</TextLabel><br />
+                        <TextLabel>WiFi status: {status.wifiStatus}</TextLabel><br />
+                        <TextLabel>Current FileName: {status.currentFileName}</TextLabel><br />
+                        <TextLabel>Current fileStatus: {status.fileStatus}</TextLabel><br />
+                        <TextLabel>fileParseStatus: {status.fileParseStatus}</TextLabel><br />
+                        <TextLabel>Current Time: {status.time}</TextLabel><br />
+                        <TextLabel>Temperature: {status.temperature}</TextLabel><br />
+                        <TextLabel>Cloudiness: {status.cloudiness}</TextLabel><br />
+                        <TextLabel>Last Update Time: {status.lastUpdateTime}</TextLabel><br />
+                        <TextLabel>Weather Updated: {status.weatherUpdated}</TextLabel><br />
+                        <TextLabel>Weather Updated Status: {status.weatherUpdatedStatus}</TextLabel><br />
+                        <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
+                        <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
+                    </FlexCol>)}
+                </FlexRow>
+
+                {files &&  <FilesDisplay files={files}/>}
+            </FlexRow>
+        </CenteredContainer>
     );
 };
 
