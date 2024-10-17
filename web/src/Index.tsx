@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { makeOnLoad } from './lib';
 
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 
 import styled from 'styled-components';
 import { useForm } from 'react-hook-form';
@@ -36,11 +36,19 @@ const FlexRow = styled.div`
     display: flex;
     flex-direction: row;
     align-items: center;
+    margin-top: 1rem;
+    margin-left: 2rem;
 `;
 
 type Status = {
     sdStatus: string;
     isWorking: boolean;
+
+    lastUpdateTime: string;
+    weatherUpdated: string;
+    weatherUpdatedStatus: string;
+
+
     wifiStatus: string;
     currentFileName: string;
     fileStatus: string;
@@ -89,25 +97,41 @@ const App: React.FC = () => {
         }
     });
 
+    // useSWR with options to disable automatic revalidation
+    const { data: opts } = useSWR('/options', fetcher, {
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
+        refreshInterval: 0
+    });
+
+    // Function to manually revalidate
+    const revalidate = () => {
+        mutate('/options');
+    };
+
     useEffect(() => {
         (async () => {
-            let response = await fetch('/options');
-            let data = await response.json();
+            if (!opts) {
+                return;
+            }
 
             wifiForm.reset({
-                ssid: data.ssid,
-                password: data.password
+                ssid: opts.ssid,
+                password: opts.password
             });
+            
             weatherForm.reset({
-                apiKey: data.apiKey,
-                latitude: data.latitude,
-                longitude: data.longitude
+                apiKey: opts.apiKey,
+                latitude: opts.latitude,
+                longitude: opts.longitude
             });
+
         })();
-    },[]);
+    },[opts]);
 
     const { data: status } = useSWR<Status>('/status', fetcher, { refreshInterval: REFETCH_INTERVAL });
 
+    //todo: fix this
     const { data: files } = useSWR<Files>('/files', fetcher, { refreshInterval: REFETCH_INTERVAL });
 
     
@@ -121,9 +145,12 @@ const App: React.FC = () => {
         }
     };
 
+    //todo: fix this
     const send_post = (url: string) => async (data: any) => {
         const queryParams = new URLSearchParams(data).toString();
         const urlWithParams = `${url}?${queryParams}`;
+
+        console.log(data," send to ",urlWithParams);
 
         let response = await fetch(urlWithParams, {
             method: 'POST',
@@ -132,9 +159,10 @@ const App: React.FC = () => {
         if (!response.ok) {
             throw new Error('Network response was not ok');
         }
+
+        revalidate();
     }
 
-    // fix wifi form (populate)
 
     return (
         <div>
@@ -171,7 +199,7 @@ const App: React.FC = () => {
                 </div>
                 {status && (<div>
                     <TextLabel>SD Status: {status.sdStatus}</TextLabel><br />
-                    <TextLabel>SD isWorking: {status.isWorking}</TextLabel><br />
+                    <TextLabel>SD isWorking: {status.isWorking ? <>Yes</> : <>No</>}</TextLabel><br />
                     <TextLabel>WiFi status: {status.wifiStatus}</TextLabel><br />
                     <TextLabel>Current FileName: {status.currentFileName}</TextLabel><br />
                     <TextLabel>Current fileStatus: {status.fileStatus}</TextLabel><br />
@@ -179,7 +207,9 @@ const App: React.FC = () => {
                     <TextLabel>Current Time: {status.time}</TextLabel><br />
                     <TextLabel>Temperature: {status.temperature}</TextLabel><br />
                     <TextLabel>Cloudiness: {status.cloudiness}</TextLabel><br />
-
+                    <TextLabel>Last Update Time: {status.lastUpdateTime}</TextLabel><br />
+                    <TextLabel>Weather Updated: {status.weatherUpdated}</TextLabel><br />
+                    <TextLabel>Weather Updated Status: {status.weatherUpdatedStatus}</TextLabel><br />
                     <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
                     <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
                 </div>)}
