@@ -34,8 +34,13 @@ const Form = styled.form`
     flex-direction: column;
     align-items: center;
     border: 2px solid #000;
-    margin-right: 0.5rem;
-    margin-left: 0.5rem;
+    border-radius: 3%;
+
+    border-color: #818193;
+    background-color: #d9e4f6;
+
+    margin: 0.5rem;
+    padding: 1rem;
 `;
 
 const FlexRow = styled.div`
@@ -43,9 +48,6 @@ const FlexRow = styled.div`
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    margin-top: 1rem;
-    margin-left: 2rem;
-    padding: 1rem;
     hyphens: auto;
 `;
 
@@ -54,9 +56,6 @@ const FlexCol = styled.div`
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin-top: 1rem;
-    margin-left: 2rem;
-    padding: 1rem;
 `;
 
 const CenteredContainer = styled.div`
@@ -66,6 +65,7 @@ const CenteredContainer = styled.div`
     overflow-y: scroll;
 
     /* height: 100vh; */
+    min-width: 500px;
     width: 100vw;
 `;
 
@@ -298,13 +298,13 @@ const App: React.FC = () => {
                 </FlexCol>
 
                 <FlexCol>
-                    <FlexCol>
+                    <FlexRow>
                         <ActionButton onClick={send_patch('/start_ap')}>Start Access Point</ActionButton><br />
                         <ActionButton onClick={send_patch('/connect_wifi')}>Connect to WiFi</ActionButton><br />
                         <ActionButton onClick={send_patch('/sync_time')}>Synchronize Time</ActionButton><br />
                         <ActionButton onClick={send_patch('/start_work')}>Start Work</ActionButton><br />
                         <ActionButton onClick={send_patch('/stop_work')}>Stop Work</ActionButton><br />
-                    </FlexCol>
+                    </FlexRow>
                     {status && (<FlexCol>
                         <TextLabel>SD Status: {status.sdStatus}</TextLabel><br />
                         <TextLabel>SD isWorking: {status.isWorking ? <>Yes</> : <>No</>}</TextLabel><br />
