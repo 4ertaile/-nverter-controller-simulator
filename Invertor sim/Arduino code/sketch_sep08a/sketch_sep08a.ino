@@ -800,12 +800,6 @@ void setupWebServer() {
     request->send(200, "text/html", html);
   });
 
-  server.on("/seeFiles", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String html = makeIndexFile("files.js");
-    request->send(200, "text/html", html);
-  });
-
-
   server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
     DynamicJsonDocument doc(1024);  // Створюємо JSON документ
     String jsonData;
@@ -889,7 +883,6 @@ void setupWebServer() {
   server.on("/saveWifi", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
       String ssid = request->getParam("ssid", true)->value();
-
       String password = request->getParam("password", true)->value();
 
       ssid.toCharArray(wifiSSID, sizeof(wifiSSID));

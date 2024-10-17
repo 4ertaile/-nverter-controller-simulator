@@ -45,9 +45,8 @@ type Status = {
     isWorking: boolean;
 
     lastUpdateTime: string;
-    weatherUpdated: string;
+    weatherUpdated: boolean;
     weatherUpdatedStatus: string;
-
 
     wifiStatus: string;
     currentFileName: string;
@@ -134,6 +133,8 @@ const App: React.FC = () => {
     //todo: fix this
     const { data: files } = useSWR<Files>('/files', fetcher, { refreshInterval: REFETCH_INTERVAL });
 
+    console.log(files);
+
     
     const send_patch = (url: string) => async () => {
         let response = await fetch(url, {
@@ -177,7 +178,7 @@ const App: React.FC = () => {
                     <SInput type='submit' value='Save' />
                 </Form>
                 <Form onSubmit={
-                    wifiForm.handleSubmit(send_post('/saveWeather'))
+                    weatherForm.handleSubmit(send_post('/saveWeather'))
                 }>
                     <TextLabel>ApiKey:</TextLabel>
                     <SInput type='text' {...weatherForm.register("apiKey")} /><br />
@@ -213,17 +214,17 @@ const App: React.FC = () => {
                     <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
                     <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
                 </div>)}
-
-                {files && 
-                    <FlexRow>{
-                        files.map(
-                            ({name}) => (<React.Fragment key={name}>
-                                <TextLabel>{name}</TextLabel><br />
-                            </React.Fragment>)
-                        )    
-                    }</FlexRow>
-                }
             </FlexRow>
+
+            {files && 
+                <FlexRow>{
+                    files.map(
+                        ({name}) => (<React.Fragment key={name}>
+                            <TextLabel>{name}</TextLabel><br />
+                        </React.Fragment>)
+                    )    
+                }</FlexRow>
+            }
         </div>
     );
 };
