@@ -35,6 +35,15 @@ float temperature;
 int cloudiness;
 char apiKey[64] = "";  // Ваш API-ключ OpenWeatherMap
 
+//invertor settings
+char invertorIp[15] = "";
+char invertorPort[4] = "";
+char invertorId[10] = "";
+
+
+
+
+
 
 float solarGeneration = 0, powerConsumption = 0;
 bool isWorking = false, timeSynced = false;
@@ -73,12 +82,14 @@ void setup() {
 
   // Ініціалізація Modbus
   node.begin(1, Serial);  // ID = 1 (Slave address)
-
   // Завантажуємо налаштування Wi-Fi
   preferences.begin("esp-settings", false);
   preferences.getString("wifiSSID", wifiSSID, sizeof(wifiSSID));
   preferences.getString("wifiPassword", wifiPassword, sizeof(wifiPassword));
   preferences.getString("apiKey", apiKey, sizeof(apiKey));
+  preferences.getString("invertorIp", invertorIp, sizeof(invertorIp));
+  preferences.getString("invertorPort", invertorPort, sizeof(invertorPort));
+  preferences.getString("invertorId", invertorId, sizeof(invertorId));
   mode = preferences.getInt("mode", 0);
   preferences.getString("latitude", latitude, sizeof(latitude));
   preferences.getString("longitude", longitude, sizeof(longitude));
@@ -117,7 +128,7 @@ void setup() {
 
   // Запуск індикації діодом
   ledStopFlag = false;
-  //xTaskCreate(ledTask, "LED Blink Task", 1024, NULL, 1, &ledTaskHandle);
+  xTaskCreate(ledTask, "LED Blink Task", 1024, NULL, 1, &ledTaskHandle);
   //delete this
   // std::vector<String> filePaths = { "/09_2024/18-09-2024.json", "/09_2024/23-09-2024.json" };
   // String searchTime = "12:05:00";
@@ -607,7 +618,7 @@ void syncTime() {
 }
 // Функція для конвертації UNIX-часу в дату (yyyy-mm-dd)
 String getFormattedDate() {
-  time_t rawTime = timeClient.getEpochTime();  // Отримуємо UNIX-час
+  time_t rawTime = timeClient.getEpochTime();
   struct tm *timeInfo = localtime(&rawTime);   // Конвертуємо в структуру часу
 
   // Формуємо рядок у форматі yyyy-mm-dd
@@ -615,6 +626,15 @@ String getFormattedDate() {
   snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d", timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday);
   return String(buffer);
 }
+String getFormattedDate(time_t rawTime) {
+  struct tm *timeInfo = localtime(&rawTime);   // Конвертуємо в структуру часу
+
+  // Формуємо рядок у форматі yyyy-mm-dd
+  char buffer[11];
+  snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d", timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday);
+  return String(buffer);
+}
+
 
 // Функция для проверки SD-карты без лишних сообщений
 bool sDIsOk() {
@@ -848,7 +868,7 @@ void setupWebServer() {
     doc["fileStatus"] = fileStatus;
     doc["fileParseStatus"] = fileParseStatus;
     doc["time"] = String(getFormattedDate() + " " + timeClient.getFormattedTime());
-    doc["lastUpdateTime"] = lastUpdateTime;
+    doc["lastUpdateTime"] = getFormattedDate(lastUpdateTime);
     doc["weatherUpdated"] = weatherUpdated;
     doc["weatherUpdatedStatus"] = weatherUpdatedStatus;
 
@@ -872,6 +892,11 @@ void setupWebServer() {
     doc["latitude"] = String(latitude);
     doc["longitude"] = String(longitude);
 
+    doc["Ip"] = String(invertorIp);
+    doc["Port"] = String(invertorPort);
+    doc["Id"] = String(invertorId);
+
+
     String jsonResponse;
     serializeJson(doc, jsonResponse);
 
@@ -881,8 +906,8 @@ void setupWebServer() {
 
   // Інші наявні маршрути
   server.on("/saveWifi", HTTP_POST, [](AsyncWebServerRequest *request) {
-      String ssid = request->getParam("ssid")->value();
 
+      String ssid = request->getParam("ssid")->value();
       String password = request->getParam("password")->value();
 
       ssid.toCharArray(wifiSSID, sizeof(wifiSSID));
@@ -895,20 +920,39 @@ void setupWebServer() {
 
       request->send(200);
   });
+    server.on("/saveInvertor", HTTP_POST, [](AsyncWebServerRequest *request) {
+
+      String NinvertorIp = request->getParam("Ip")->value();
+      String NinvertorPort = request->getParam("Port")->value();
+      String NinvertorId = request->getParam("Id")->value();
+
+      NinvertorIp.toCharArray(invertorIp, sizeof(invertorIp));
+      NinvertorPort.toCharArray(invertorPort, sizeof(invertorPort));
+      NinvertorId.toCharArray(invertorId, sizeof(invertorId));
+
+      preferences.begin("esp-settings", false);
+      preferences.putString("invertorIp", invertorIp);
+      preferences.putString("invertorPort", invertorPort);
+      preferences.putString("invertorId", invertorId);
+      preferences.end();
+
+      request->send(200);
+  });
 
   server.on("/saveWeather", HTTP_POST, [](AsyncWebServerRequest *request) {
-    
+
       String NapiKey = request->getParam("apiKey")->value();
       String Nlatitude = request->getParam("latitude")->value();
       String Nlongitude = request->getParam("longitude")->value();
+
       NapiKey.toCharArray(apiKey, sizeof(apiKey));
       Nlatitude.toCharArray(latitude, sizeof(latitude));
       Nlongitude.toCharArray(longitude, sizeof(longitude));
 
       preferences.begin("esp-settings", false);
-      preferences.putString("apiKey", NapiKey);
-      preferences.putString("latitude", Nlatitude);
-      preferences.putString("longitude", Nlongitude);
+      preferences.putString("apiKey", apiKey);
+      preferences.putString("latitude", latitude);
+      preferences.putString("longitude", longitude);
       preferences.end();
 
 
