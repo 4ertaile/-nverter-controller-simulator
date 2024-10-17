@@ -43,6 +43,12 @@ const FlexRow = styled.div`
 type Status = {
     sdStatus: string;
     isWorking: boolean;
+
+    lastUpdateTime: string;
+    weatherUpdated: string;
+    weatherUpdatedStatus: string;
+
+
     wifiStatus: string;
     currentFileName: string;
     fileStatus: string;
@@ -119,6 +125,7 @@ const App: React.FC = () => {
                 latitude: opts.latitude,
                 longitude: opts.longitude
             });
+
         })();
     },[opts]);
 
@@ -192,7 +199,7 @@ const App: React.FC = () => {
                 </div>
                 {status && (<div>
                     <TextLabel>SD Status: {status.sdStatus}</TextLabel><br />
-                    <TextLabel>SD isWorking: {status.isWorking}</TextLabel><br />
+                    <TextLabel>SD isWorking: {status.isWorking ? <>Yes</> : <>No</>}</TextLabel><br />
                     <TextLabel>WiFi status: {status.wifiStatus}</TextLabel><br />
                     <TextLabel>Current FileName: {status.currentFileName}</TextLabel><br />
                     <TextLabel>Current fileStatus: {status.fileStatus}</TextLabel><br />
@@ -200,7 +207,9 @@ const App: React.FC = () => {
                     <TextLabel>Current Time: {status.time}</TextLabel><br />
                     <TextLabel>Temperature: {status.temperature}</TextLabel><br />
                     <TextLabel>Cloudiness: {status.cloudiness}</TextLabel><br />
-
+                    <TextLabel>Last Update Time: {status.lastUpdateTime}</TextLabel><br />
+                    <TextLabel>Weather Updated: {status.weatherUpdated}</TextLabel><br />
+                    <TextLabel>Weather Updated Status: {status.weatherUpdatedStatus}</TextLabel><br />
                     <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
                     <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
                 </div>)}
