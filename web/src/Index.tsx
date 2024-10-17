@@ -279,7 +279,17 @@ const App: React.FC = () => {
                         <SInput {...weatherForm.register("longitude")} /><br />
                         <SInput type='submit' value='Save' />
                     </Form>
-                    {files &&  <FilesDisplay files={files}/>}
+                    <Form onSubmit={
+                        invertorForm.handleSubmit(send_post('/saveInvertor'))
+                    }>
+                        <TextLabel>Invertor IP:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("ip")} /><br />
+                        <TextLabel>Invertor Port:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("port")} /><br />
+                        <TextLabel>Invertor ID:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("id")} /><br />
+                        <SInput type='submit' value='Save' />
+                    </Form>
                 </FlexRow>
 
                 <FlexRow>
@@ -307,20 +317,6 @@ const App: React.FC = () => {
                         <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
                     </FlexCol>)}
                 </FlexRow>
-
-                <FlexCol>
-                    <Form onSubmit={
-                        invertorForm.handleSubmit(send_post('/saveInvertor'))
-                    }>
-                        <TextLabel>Invertor IP:</TextLabel>
-                        <SInput type='text' {...invertorForm.register("ip")} /><br />
-                        <TextLabel>Invertor Port:</TextLabel>
-                        <SInput type='text' {...invertorForm.register("port")} /><br />
-                        <TextLabel>Invertor ID:</TextLabel>
-                        <SInput type='text' {...invertorForm.register("id")} /><br />
-                        <SInput type='submit' value='Save' />
-                    </Form>
-                </FlexCol>
 
                 {files &&  <FilesDisplay files={files}/>}
             </FlexCol>
