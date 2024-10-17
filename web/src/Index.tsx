@@ -94,6 +94,12 @@ type WeatherForm = {
     longitude: string;
 }
 
+type InvertorForm = {
+    ip: string;
+    port: string;
+    id: string;
+}
+
 type File = {
     name: string;
     // url: string;
@@ -165,6 +171,14 @@ const App: React.FC = () => {
             apiKey: '',
             latitude: '',
             longitude: ''
+        }
+    });
+
+    const invertorForm = useForm<InvertorForm>({
+        defaultValues: {
+            ip: '',
+            port: '',
+            id: ''
         }
     });
 
@@ -256,6 +270,17 @@ const App: React.FC = () => {
                         <SInput {...weatherForm.register("latitude")} /><br />
                         <TextLabel>Longitude:</TextLabel>
                         <SInput {...weatherForm.register("longitude")} /><br />
+                        <SInput type='submit' value='Save' />
+                    </Form>
+                    <Form onSubmit={
+                        invertorForm.handleSubmit(send_post('/saveInvertor'))
+                    }>
+                        <TextLabel>Invertor IP:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("ip")} /><br />
+                        <TextLabel>Invertor Port:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("port")} /><br />
+                        <TextLabel>Invertor ID:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("id")} /><br />
                         <SInput type='submit' value='Save' />
                     </Form>
                 </FlexCol>

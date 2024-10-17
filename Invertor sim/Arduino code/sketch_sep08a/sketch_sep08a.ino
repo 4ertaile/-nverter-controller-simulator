@@ -499,9 +499,6 @@ std::vector<String> findFoldersByDayOfWeek(String dayOfWeek) {
 }
 
 
-
-
-
 // Функція для пошуку перших 4 файлів за днями тижня, в межах 25 днів
 std::vector<String> findFilesByDayOfWeek(String dayOfWeek) {
   std::vector<String> files;
@@ -730,6 +727,15 @@ String makeIndexFile(String chunk) {
              "<meta charset=\"utf-8\" />"
              "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />"
              "<title>The invertor controller</title>"
+             "<style>"
+             "@font-face {"
+             "  font-family: 'Blankenburg';"
+             "  src: url('/static/blankenburg.ttf') format('truetype');"
+             "}"
+             "body {"
+             "  font-family: 'Blankenburg', sans-serif;"
+             "}"
+             "</style>"
              "<script src=\"/static/shared.js\"></script>"
              "</head>"
              "<body style=\"display: block;\">"

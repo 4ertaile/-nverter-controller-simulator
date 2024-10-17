@@ -9,7 +9,8 @@
 
 web/node_modules/*
 
-static/*
+static/*.js
+static/*.LICENSE.txt
 
 # User-specific files
 *.suo
