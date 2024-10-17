@@ -9,11 +9,13 @@ import { useForm } from 'react-hook-form';
 const TextLabel = styled.label`
     font-size: 15px;
     font-weight: bold;
+    font-family: 'blankenburg';
 `;
 
 const ActionButton = styled.button`
     font-size: 15px;
     font-weight: bold;
+    font-family: 'blankenburg';
 
     &:hover {
         background-color: #dd7311;
@@ -22,6 +24,7 @@ const ActionButton = styled.button`
 
 const SInput = styled.input`
     font-size: 15px;
+    font-family: 'blankenburg';
     font-weight: bold;
     width: 200px;
 `;
@@ -41,6 +44,9 @@ const FlexRow = styled.div`
     margin-left: 2rem;
     padding: 1rem;
     hyphens: auto;
+
+    border: 1px solid #000;
+    border-radius: 4%;
 `;
 
 const FlexCol = styled.div`
@@ -51,8 +57,7 @@ const FlexCol = styled.div`
     margin-top: 1rem;
     margin-left: 2rem;
 
-    border: 1px solid #000;
-    border-radius: 10%;
+    
 
     padding: 1rem;
 `;
@@ -213,6 +218,12 @@ const App: React.FC = () => {
                 longitude: opts.longitude
             });
 
+            invertorForm.reset({
+                ip: opts.ip,
+                port: opts.port,
+                id: opts.id
+            });
+
         })();
     },[opts]);
 
@@ -252,8 +263,8 @@ const App: React.FC = () => {
 
     return (
         <CenteredContainer>
-            <FlexRow>
-                <FlexCol>
+            <FlexCol>
+                <FlexRow>
                     <Form onSubmit={
                         wifiForm.handleSubmit(send_post('/saveWifi'))
                     }>
@@ -274,7 +285,18 @@ const App: React.FC = () => {
                         <SInput {...weatherForm.register("longitude")} /><br />
                         <SInput type='submit' value='Save' />
                     </Form>
-                </FlexCol>
+                    <Form onSubmit={
+                        invertorForm.handleSubmit(send_post('/saveInvertor'))
+                    }>
+                        <TextLabel>Invertor IP:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("ip")} /><br />
+                        <TextLabel>Invertor Port:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("port")} /><br />
+                        <TextLabel>Invertor ID:</TextLabel>
+                        <SInput type='text' {...invertorForm.register("id")} /><br />
+                        <SInput type='submit' value='Save' />
+                    </Form>
+                </FlexRow>
 
                 <FlexRow>
                     <FlexCol>
@@ -302,22 +324,8 @@ const App: React.FC = () => {
                     </FlexCol>)}
                 </FlexRow>
 
-                <FlexCol>
-                    <Form onSubmit={
-                        invertorForm.handleSubmit(send_post('/saveInvertor'))
-                    }>
-                        <TextLabel>Invertor IP:</TextLabel>
-                        <SInput type='text' {...invertorForm.register("ip")} /><br />
-                        <TextLabel>Invertor Port:</TextLabel>
-                        <SInput type='text' {...invertorForm.register("port")} /><br />
-                        <TextLabel>Invertor ID:</TextLabel>
-                        <SInput type='text' {...invertorForm.register("id")} /><br />
-                        <SInput type='submit' value='Save' />
-                    </Form>
-                </FlexCol>
-
                 {files &&  <FilesDisplay files={files}/>}
-            </FlexRow>
+            </FlexCol>
         </CenteredContainer>
     );
 };
