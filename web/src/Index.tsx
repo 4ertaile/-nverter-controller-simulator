@@ -33,11 +33,26 @@ const Form = styled.form`
 `;
 
 const FlexRow = styled.div`
-    display: flex;
+    display: inline-flex;
     flex-direction: row;
     align-items: center;
+    justify-content: center;
     margin-top: 1rem;
     margin-left: 2rem;
+    border: 1px solid #000;
+    padding: 1rem;
+    hyphens: auto;
+`;
+
+const FlexCol = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1rem;
+    margin-left: 2rem;
+    border: 1px solid #000;
+    padding: 1rem;
 `;
 
 type Status = {
@@ -133,11 +148,9 @@ const App: React.FC = () => {
 
     const { data: status } = useSWR<Status>('/status', fetcher, { refreshInterval: REFETCH_INTERVAL });
 
-    //todo: fix this
     const { data: files } = useSWR<Files>('/files', fetcher, { refreshInterval: REFETCH_INTERVAL });
 
     console.log(files);
-
     
     const send_patch = (url: string) => async () => {
         let response = await fetch(url, {
@@ -149,7 +162,6 @@ const App: React.FC = () => {
         }
     };
 
-    //todo: fix this
     const send_post = (url: string) => async (data: any) => {
         const queryParams = new URLSearchParams(data).toString();
         const urlWithParams = `${url}?${queryParams}`;
@@ -169,8 +181,8 @@ const App: React.FC = () => {
 
 
     return (
-        <div>
-            <FlexRow>
+        <FlexRow>
+            <FlexCol>
                 <Form onSubmit={
                     wifiForm.handleSubmit(send_post('/saveWifi'))
                 }>
@@ -191,17 +203,17 @@ const App: React.FC = () => {
                     <SInput {...weatherForm.register("longitude")} /><br />
                     <SInput type='submit' value='Save' />
                 </Form>
-            </FlexRow>
+            </FlexCol>
 
             <FlexRow>
-                <div>
+                <FlexCol>
                     <ActionButton onClick={send_patch('/start_ap')}>Start Access Point</ActionButton><br />
                     <ActionButton onClick={send_patch('/connect_wifi')}>Connect to WiFi</ActionButton><br />
                     <ActionButton onClick={send_patch('/sync_time')}>Synchronize Time</ActionButton><br />
                     <ActionButton onClick={send_patch('/start_work')}>Start Work</ActionButton><br />
                     <ActionButton onClick={send_patch('/stop_work')}>Stop Work</ActionButton><br />
-                </div>
-                {status && (<div>
+                </FlexCol>
+                {status && (<FlexCol>
                     <TextLabel>SD Status: {status.sdStatus}</TextLabel><br />
                     <TextLabel>SD isWorking: {status.isWorking ? <>Yes</> : <>No</>}</TextLabel><br />
                     <TextLabel>WiFi status: {status.wifiStatus}</TextLabel><br />
@@ -216,11 +228,11 @@ const App: React.FC = () => {
                     <TextLabel>Weather Updated Status: {status.weatherUpdatedStatus}</TextLabel><br />
                     <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
                     <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
-                </div>)}
+                </FlexCol>)}
             </FlexRow>
 
             {files && 
-                <FlexRow>
+                <FlexCol>
                     {Object.entries(files).map(([day, files]) => (
                         <React.Fragment key={day}>
                             <TextLabel>Day: {day}</TextLabel>
@@ -231,9 +243,9 @@ const App: React.FC = () => {
                             ))}
                         </React.Fragment>
                     ))}
-                </FlexRow>
+                </FlexCol>
             }
-        </div>
+        </FlexRow>
     );
 };
 
