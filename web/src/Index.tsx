@@ -47,9 +47,6 @@ const FlexRow = styled.div`
     margin-left: 2rem;
     padding: 1rem;
     hyphens: auto;
-
-    border: 1px solid #000;
-    border-radius: 4%;
 `;
 
 const FlexCol = styled.div`
@@ -59,9 +56,6 @@ const FlexCol = styled.div`
     justify-content: center;
     margin-top: 1rem;
     margin-left: 2rem;
-
-    
-
     padding: 1rem;
 `;
 
@@ -269,7 +263,7 @@ const App: React.FC = () => {
     return (
         <CenteredContainer>
             <FlexCol>
-                <FlexRow>
+                <FlexCol>
                     <Form onSubmit={
                         wifiForm.handleSubmit(send_post('/saveWifi'))
                     }>
@@ -301,9 +295,9 @@ const App: React.FC = () => {
                         <SInput type='text' {...invertorForm.register("id")} /><br />
                         <SInput type='submit' value='Save' />
                     </Form>
-                </FlexRow>
+                </FlexCol>
 
-                <FlexRow>
+                <FlexCol>
                     <FlexCol>
                         <ActionButton onClick={send_patch('/start_ap')}>Start Access Point</ActionButton><br />
                         <ActionButton onClick={send_patch('/connect_wifi')}>Connect to WiFi</ActionButton><br />
@@ -327,7 +321,7 @@ const App: React.FC = () => {
                         <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
                         <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
                     </FlexCol>)}
-                </FlexRow>
+                </FlexCol>
 
                 {files &&  <FilesDisplay files={files}/>}
             </FlexCol>
