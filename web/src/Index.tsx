@@ -72,8 +72,11 @@ type WeatherForm = {
 }
 
 type Files = {
-    name: string;
-}[]
+    [dir: string]: {
+        name: string;
+        // url: string;
+    }[];
+}
 
 const REFETCH_INTERVAL = 2000; //ms
 
@@ -217,13 +220,18 @@ const App: React.FC = () => {
             </FlexRow>
 
             {files && 
-                <FlexRow>{
-                    files.map(
-                        ({name}) => (<React.Fragment key={name}>
-                            <TextLabel>{name}</TextLabel><br />
-                        </React.Fragment>)
-                    )    
-                }</FlexRow>
+                <FlexRow>
+                    {Object.entries(files).map(([day, files]) => (
+                        <React.Fragment key={day}>
+                            <TextLabel>Day: {day}</TextLabel>
+                            {files.map((file) => (
+                                <div key={file.name}>
+                                    <TextLabel>File: {file.name}</TextLabel><br />
+                                </div>
+                            ))}
+                        </React.Fragment>
+                    ))}
+                </FlexRow>
             }
         </div>
     );
