@@ -45,6 +45,10 @@ String Wifi_status = "";
 const int chipSelect = 5;  // Пін CS для SD-карти
 String currentFileName = "";
 String fileStatus = "";
+unsigned long lastUpdateTime = 0;  // Час останнього успішного оновлення у форматі HH:MM:SS
+bool weatherUpdated = false;          // Чи були успішно оновлені дані
+String weatherUpdatedStatus = "";
+
 
 // Змінні для FreeRTOS і індикації діодом
 const int LED_PIN = 2;  // Пін для діода
@@ -123,7 +127,6 @@ void setup() {
   // Serial.println("Time: " + averageData.Time);
   // Serial.println("Average Power Consumption: " + String(averageData.PowerConsumption));
   // Serial.println("Average Solar Generation: " + String(averageData.SolarGeneration));
-
 }
 // Функція для повернення назви дня тижня
 String getDayOfWeek(int dayIndex) {
@@ -142,6 +145,9 @@ String getDayOfWeek(int dayIndex) {
 // Функція для отримання температури та хмарності
 void getWeatherData(float lat, float lon, float &temperature, int &cloudiness) {
   String units = "metric";
+  unsigned long currentTime = timeClient.getEpochTime();  // Отримуємо поточний Unix-час
+  unsigned long fiveMinutes = 300;                        // 5 хвилин у секундах (300 секунд)
+
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
 
@@ -163,18 +169,39 @@ void getWeatherData(float lat, float lon, float &temperature, int &cloudiness) {
         // Отримуємо необхідні дані з JSON
         temperature = doc["main"]["temp"];
         cloudiness = doc["clouds"]["all"];
+
+        // Оновлюємо змінні успішного оновлення
+        lastUpdateTime = currentTime;  // Оновлюємо Unix-час останнього успішного запиту
+        weatherUpdated = true;            // Дані успішно оновлені
+        weatherUpdatedStatus = "Weather data updated successfully.";
       } else {
-        Serial.println("Error on HTTP request");
+        weatherUpdatedStatus = "Error on HTTP request, using previous data.";
       }
     } else {
-      Serial.println("Failed to connect to API");
+      weatherUpdatedStatus = "Failed to connect to API, using previous data.";
     }
 
     http.end();  // Закриваємо з'єднання
   } else {
-    Serial.println("WiFi Disconnected");
+    weatherUpdatedStatus = "WiFi Disconnected, using previous data.";
+  }
+
+  // Перевірка, чи пройшло більше 5 хвилин з останнього успішного оновлення
+  if (!weatherUpdated || (currentTime - lastUpdateTime) > fiveMinutes) {
+    weatherUpdated = false;  // Якщо більше 5 хвилин без успішного оновлення, дані вважаються застарілими
+    weatherUpdatedStatus = "Data not updated for more than 5 minutes.";
+  }
+
+  // Лог для перевірки статусу оновлення
+  if (weatherUpdated) {
+    weatherUpdatedStatus = "Data is up-to-date.";
+  } else {
+    weatherUpdatedStatus = "Data is outdated.";
   }
 }
+
+
+
 
 // Функція для перетворення часу з формату "HH:MM:SS" у кількість секунд з початку дня
 time_t convertToSecondsFromMidnight(String timeString) {
@@ -188,6 +215,9 @@ time_t convertToSecondsFromMidnight(String timeString) {
 }
 
 EnergyData processFilesAndGetAverage(std::vector<String> filePaths, String searchTime) {
+  if (!sDIsOk()) {
+    return {};
+  }
   float totalPowerConsumption = 0.0;
   float totalSolarGeneration = 0.0;
   int count = 0;
@@ -408,9 +438,9 @@ std::vector<String> findFoldersByDayOfWeek(String dayOfWeek) {
 
   // Отримуємо поточну дату
   String date = getFormattedDate();
-  String currentMonth = date.substring(5, 7);    // Отримуємо поточний місяць (MM)
-  String currentYear = date.substring(0, 4);     // Отримуємо поточний рік (YYYY)
-  String folderName = "/" + currentMonth + "_" + currentYear;  // Папка формату MM_YYYY
+  String currentMonth = date.substring(5, 7);                                                  // Отримуємо поточний місяць (MM)
+  String currentYear = date.substring(0, 4);                                                   // Отримуємо поточний рік (YYYY)
+  String folderName = "/" + currentMonth + "_" + currentYear;                                  // Папка формату MM_YYYY
   String currentDayInFormat = date.substring(8, 10) + "-" + currentMonth + "-" + currentYear;  // DD-MM-YYYY
 
   // Перший пошук у поточному місяці
@@ -591,44 +621,19 @@ String getFormattedDate() {
   return String(buffer);
 }
 
-// String getTodayDataFilePathIfExist() {
-//   String FileName = "";
-//   String currentFileName = "";
-
-//   String date = getFormattedDate();
-//   String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                                  // /mm_yyyy
-//   String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";  // dd-mm-yyyy.json
-//   currentFileName = folderName + "/" + fileName;
-
-//   if (SD.exists(folderName) && SD.exists(currentFileName)) {
-//     return currentFileName;
-//   }
-//   return "";
-// }
-
-// String getTodayDataFileNameIfExist() {
-//   String FileName = "";
-//   String currentFileName = "";
-
-//   String date = getFormattedDate();
-//   String folderName = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                                  // /mm_yyyy
-//   String fileName = date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4) + ".json";  // dd-mm-yyyy.json
-//   currentFileName = folderName + "/" + fileName;
-
-//   if (SD.exists(folderName) && SD.exists(currentFileName)) {
-//     return fileName;
-//   }
-//   return "";
-// }
-
+// Функция для проверки SD-карты без лишних сообщений
 bool sDIsOk() {
-  if (SD.begin(chipSelect)) {
+  // Инициализация SD-карты
+  if (SD.begin(chipSelect) && SD.open("/static/index.js")) {
     SD_Status = "SD card initialization fine";
+    Serial.println("1");
     return true;
-  } else {
-    SD_Status = "SD card initialization failed!";
-    return false;
+    
   }
+  SD_Status = "SD card initialization failed!";
+  Serial.println("2");
+  return false;
+  
 }
 
 void writeDataToSD(String requestTime) {
@@ -643,7 +648,9 @@ void writeDataToSD(String requestTime) {
   String date = getFormattedDate();
   String yearMonthFolder = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                          // MM_YYYY
   String dayFolder = "/" + date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4);  // DD-MM-YYYY
-  String fileName = date.substring(8, 10) + ".json";                                                         // Формат: HH.json
+    // Витягуємо годину з часу HH:MM:SS
+  String hour = requestTime.substring(0, 2);  // Витягуємо "HH"
+  String fileName = hour + ".json";           //Формат: HH.json
 
   // Створюємо папку року і місяця, якщо вона не існує
   if (!SD.exists(yearMonthFolder)) {
@@ -722,70 +729,67 @@ void writeDataToSD(String requestTime) {
 String makeIndexFile(String chunk) {
   String chunkUrl = "/static/" + chunk;
 
-  if (sDIsOk() && SD.open("/static/index.js")) {
-  return "<!DOCTYPE html>"
-      "<html lang=\"en\">"
-      "<head>"
-        "<meta charset=\"utf-8\" />"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />"
-        "<title>The invertor controller</title>"
-        "<script src=\"/static/shared.js\"></script>"
-      "</head>"
-      "<body style=\"display: block;\">"
-        "<script src=" + chunkUrl + "></script>"
-        "<div id=\"app\"></div>"
-      "</body>"
-      "</html>";
+  if (sDIsOk()) {
+    if (SD.open("/static/index.js")) {
+      return "<!DOCTYPE html>"
+             "<html lang=\"en\">"
+             "<head>"
+             "<meta charset=\"utf-8\" />"
+             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />"
+             "<title>The invertor controller</title>"
+             "<script src=\"/static/shared.js\"></script>"
+             "</head>"
+             "<body style=\"display: block;\">"
+             "<script src="
+             + chunkUrl + "></script>"
+                          "<div id=\"app\"></div>"
+                          "</body>"
+                          "</html>";
+    }
   }
 
   String pCode = "const send_patch = (url) => async () =>{"
-        "let response = await fetch(url, {"
-            "method: 'PATCH',});"
-        "if (!response.ok) {"
-            "throw new Error('Network response was not ok');}}";
+                 "let response = await fetch(url, {"
+                 "method: 'PATCH',});"
+                 "if (!response.ok) {"
+                 "throw new Error('Network response was not ok');}}";
 
   String html = "<!DOCTYPE html>"
-      "<html lang=\"en\">"
-      "<head>"
-        "<meta charset=\"utf-8\" />"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />"
-        "<title>The invertor controller</title>"
-        "<script>"+pCode+"</script>"
-      "</head>"
-      "<body style=\"display: block;\">"
-        "<form action='/saveWifi' method='POST'>"
-                      "<label>WiFi SSID:</label><input type='text' name='ssid' value='"+ String(wifiSSID) + "'><br>"
-                      "<label>WiFi Password:</label><input type='password' name='password' value='"+ String(wifiPassword) + "'><br>"
-                      "<input type='submit' value='Save'></form><br>"
-                      "<form action='/saveWeather' method='POST'>"
-                      "<label>ApiKey:</label><input type='text' name='apiKey' value='"+ String(apiKey) + "'><br>"
-                      "<label>Latitude:</label><input  name='latitude' value='"+ String(latitude) + "'><br>"
-                      "<label>Longitude:</label><input  name='longitude' value='"+ String(longitude) + "'><br>"
-                      "<input type='submit' value='Save'></form><br>"
-                      "<button onclick=\"send_patch('/start_ap')\">Start Access Point</button><br>"
-                      "<button onclick=\"send_patch('/connect_wifi')\">Connect to WiFi</button><br>"
-                      "<button onclick=\"send_patch('/sync_time')\">Synchronize Time</button><br>"
-                      "<button onclick=\"send_patch('/start_work')\">Start Work</button><br>"
-                      "<button onclick=\"send_patch('/stop_work')\">Stop Work</button><br>"
-                      "<label>SD Status: "
-                       + String(SD_Status) + "</label><br>"
-                      "<label>SD isWorking: "
-                       + String(isWorking) + "</label><br>"
-                      "<label>WiFi status: "
-                       + String(Wifi_status) + "</label><br>"
-                      "<label>Current FileName: "
-                       + String(currentFileName) + "</label><br>"
-                      "<label>Current fileStatus: "
-                       + String(fileStatus) + "</label><br>"
-                        "<label>fileParseStatus: "
-                       + String(fileParseStatus) + "</label><br>"
-                         "<p>Current Time: "
-                       + getFormattedDate() + " " + timeClient.getFormattedTime() + "</p>"
-                       "<button onclick=\"window.location.href='/status'\">View SD Card and Data</button><br>"
-      "</body>"
-      "</html>";
-   return html;
-
+                "<html lang=\"en\">"
+                "<head>"
+                "<meta charset=\"utf-8\" />"
+                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />"
+                "<title>The invertor controller</title>"
+                "<script>"
+                + pCode + "</script>"
+                          "</head>"
+                          "<body style=\"display: block;\">"
+                          "<form action='/saveWifi' method='POST'>"
+                          "<label>WiFi SSID:</label><input type='text' name='ssid' value='"
+                + String(wifiSSID) + "'><br>"
+                                     "<label>WiFi Password:</label><input type='password' name='password' value='"
+                + String(wifiPassword) + "'><br>"
+                                         "<input type='submit' value='Save'></form><br>"
+                                         "<form action='/saveWeather' method='POST'>"
+                                         "<label>ApiKey:</label><input type='text' name='apiKey' value='"
+                + String(apiKey) + "'><br>"
+                                   "<label>Latitude:</label><input  name='latitude' value='"
+                + String(latitude) + "'><br>"
+                                     "<label>Longitude:</label><input  name='longitude' value='"
+                + String(longitude) + "'><br>"
+                                      "<input type='submit' value='Save'></form><br>"
+                                      "<button onclick=\"send_patch('/start_ap')\">Start Access Point</button><br>"
+                                      "<button onclick=\"send_patch('/connect_wifi')\">Connect to WiFi</button><br>"
+                                      "<button onclick=\"send_patch('/start_work')\">Start Work</button><br>"
+                                      "<button onclick=\"send_patch('/stop_work')\">Stop Work</button><br>"
+                                      "<label>SD Status: "
+                + String(SD_Status) + "</label><br>"
+                                      "<label>Program isWorking: "
+                + String(isWorking) + "</label><br>"
+                                      "<label>WiFi status: "
+                + String(Wifi_status) + "</label><br>"
+                                        "<label>Current FileName: ""</body>""</html>";
+  return html;
 }
 
 void setupWebServer() {
@@ -802,25 +806,37 @@ void setupWebServer() {
   });
 
 
-server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
-    DynamicJsonDocument doc(1024);
-    std::vector<String> files = findFilesForLastDays(25);
-    // Додаємо всі файли у JSON-масив
-    JsonArray jsonArray = doc.to<JsonArray>();
-    for (const String& file : files) {
-        jsonArray.add(file);
+  server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
+    DynamicJsonDocument doc(1024);  // Створюємо JSON документ
+    String jsonData;
+    if (sDIsOk()) {
+      // Якщо SD карта готова, отримуємо файли
+      std::vector<String> files = findFilesForLastDays(25);
+      // Створюємо JSON-масив
+      JsonArray jsonArray = doc.to<JsonArray>();
+
+      // Додаємо всі файли у JSON-масив
+      for (const String &file : files) {
+        jsonArray.add(file);  // Додаємо файл у масив
+      }
+      // Сериалізуємо JSON-масив у строку
+      serializeJson(doc, jsonData);
+    } else {
+      // Якщо SD карта недоступна, відправляємо порожній масив
+      jsonData = "[]";
     }
 
-    // Перетворюємо JSON-документ у строку
-    String jsonData;
-    serializeJson(doc, jsonData);
+    // Відправляємо JSON-відповідь
     request->send(200, "application/json", jsonData);
   });
 
   // Сервер для завантаження files з SD-карти
-
   // right is on sd card
-  server.serveStatic("/static/", SD, "/static/");
+  if (sDIsOk()) {
+    if (SD.open("/static/index.js")) {
+      server.serveStatic("/static/", SD, "/static/");
+    }
+  }
 
   // migrate all the data interactions into this way
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -831,14 +847,16 @@ server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
     doc["cloudiness"] = cloudiness;
     doc["solarGeneration"] = solarGeneration;
     doc["powerConsumption"] = powerConsumption;
-    doc["sdStatus"] = temperature;
-    doc["isWorking"] = cloudiness;
-    doc["wifiStatus"] = solarGeneration;
-    doc["currentFileName"] = powerConsumption;
-    doc["fileStatus"] = cloudiness;
-    doc["fileParseStatus"] = solarGeneration;
+    doc["sdStatus"] = SD_Status;
+    doc["isWorking"] = isWorking;
+    doc["wifiStatus"] = Wifi_status;
+    doc["currentFileName"] = currentFileName;
+    doc["fileStatus"] = fileStatus;
+    doc["fileParseStatus"] = fileParseStatus;
     doc["time"] = String(getFormattedDate() + " " + timeClient.getFormattedTime());
-
+    doc["lastUpdateTime"] = lastUpdateTime;
+    doc["weatherUpdated"] = weatherUpdated;
+    doc["weatherUpdatedStatus"] = weatherUpdatedStatus;
 
     String jsonResponse;
     serializeJson(doc, jsonResponse);
@@ -915,6 +933,7 @@ server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
     preferences.putBool("isWorking", true);  // Точка доступу
     preferences.end();
     isWorking = true;
+    Serial.printf("Data updated: %s\n", isWorking ? "true" : "false");
     request->send(200);
   });
 
@@ -923,7 +942,8 @@ server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
     preferences.putBool("isWorking", false);  // Точка доступу
     preferences.end();
     isWorking = false;
-    request->send(200);
+    Serial.printf("Data updated: %s\n", isWorking ? "true" : "false");
+    request->send(200, "/");
   });
 
   server.on("/sync_time", HTTP_PATCH, [](AsyncWebServerRequest *request) {
@@ -964,6 +984,7 @@ void startAccessPoint() {
 void ledTask(void *parameter) {
   unsigned long startMillis = millis();
   while (!ledStopFlag && millis() - startMillis < blinkDuration) {
+
     if (mode == 0) {
       digitalWrite(LED_PIN, !digitalRead(LED_PIN));  // Миготіння
       delay(500);
