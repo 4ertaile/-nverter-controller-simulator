@@ -898,9 +898,9 @@ void setupWebServer() {
     doc["latitude"] = String(latitude);
     doc["longitude"] = String(longitude);
 
-    doc["Ip"] = String(invertorIp);
-    doc["Port"] = String(invertorPort);
-    doc["Id"] = String(invertorId);
+    doc["ip"] = String(invertorIp);
+    doc["port"] = String(invertorPort);
+    doc["id"] = String(invertorId);
 
 
     String jsonResponse;
@@ -927,10 +927,9 @@ void setupWebServer() {
       request->send(200);
   });
     server.on("/saveInvertor", HTTP_POST, [](AsyncWebServerRequest *request) {
-
-      String NinvertorIp = request->getParam("Ip")->value();
-      String NinvertorPort = request->getParam("Port")->value();
-      String NinvertorId = request->getParam("Id")->value();
+      String NinvertorIp = request->getParam("ip")->value();
+      String NinvertorPort = request->getParam("port")->value();
+      String NinvertorId = request->getParam("id")->value();
 
       NinvertorIp.toCharArray(invertorIp, sizeof(invertorIp));
       NinvertorPort.toCharArray(invertorPort, sizeof(invertorPort));
