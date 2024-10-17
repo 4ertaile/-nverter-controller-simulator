@@ -218,6 +218,12 @@ const App: React.FC = () => {
                 longitude: opts.longitude
             });
 
+            invertorForm.reset({
+                ip: opts.ip,
+                port: opts.port,
+                id: opts.id
+            });
+
         })();
     },[opts]);
 
