@@ -117,7 +117,7 @@ void setup() {
 
   // Запуск індикації діодом
   ledStopFlag = false;
-  xTaskCreate(ledTask, "LED Blink Task", 1024, NULL, 1, &ledTaskHandle);
+  //xTaskCreate(ledTask, "LED Blink Task", 1024, NULL, 1, &ledTaskHandle);
   //delete this
   // std::vector<String> filePaths = { "/09_2024/18-09-2024.json", "/09_2024/23-09-2024.json" };
   // String searchTime = "12:05:00";
@@ -192,12 +192,7 @@ void getWeatherData(float lat, float lon, float &temperature, int &cloudiness) {
     weatherUpdatedStatus = "Data not updated for more than 5 minutes.";
   }
 
-  // Лог для перевірки статусу оновлення
-  if (weatherUpdated) {
-    weatherUpdatedStatus = "Data is up-to-date.";
-  } else {
-    weatherUpdatedStatus = "Data is outdated.";
-  }
+
 }
 
 
@@ -626,12 +621,10 @@ bool sDIsOk() {
   // Инициализация SD-карты
   if (SD.begin(chipSelect) && SD.open("/static/index.js")) {
     SD_Status = "SD card initialization fine";
-    Serial.println("1");
     return true;
     
   }
   SD_Status = "SD card initialization failed!";
-  Serial.println("2");
   return false;
   
 }
@@ -714,8 +707,8 @@ void writeDataToSD(String requestTime) {
   newRecord["Time"] = requestTime;
   newRecord["PowerConsumption"] = powerConsumption;
   newRecord["SolarGeneration"] = solarGeneration;
-  newRecord["Temperature"] = solarGeneration;
-  newRecord["Сloudiness"] = solarGeneration;
+  newRecord["Temperature"] = temperature;
+  newRecord["Cloudiness"] = cloudiness;
   // Записуємо новий елемент
   serializeJson(newRecord, file);
   file.print("]");  // Закриваємо масив
@@ -800,34 +793,35 @@ void setupWebServer() {
     request->send(200, "text/html", html);
   });
 
-  server.on("/seeFiles", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String html = makeIndexFile("files.js");
-    request->send(200, "text/html", html);
-  });
-
-
   server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
     DynamicJsonDocument doc(1024);  // Створюємо JSON документ
-    String jsonData;
+
     if (sDIsOk()) {
       // Якщо SD карта готова, отримуємо файли
       std::vector<String> files = findFilesForLastDays(25);
-      // Створюємо JSON-масив
-      JsonArray jsonArray = doc.to<JsonArray>();
-
-      // Додаємо всі файли у JSON-масив
+      
+      // Додаємо дані до JSON
       for (const String &file : files) {
-        jsonArray.add(file);  // Додаємо файл у масив
+        // Витягуємо назву дня з імені файлу (припустимо, формат: YYYY-MM-DD.json)
+        String dayName = file.substring(0, file.length() - 5);  // Витягнути частину без розширення .json
+        
+        // Створюємо масив для даних дня
+        JsonArray jsonArray = doc.createNestedArray(dayName);
+        
+        // Додаємо об'єкт з назвою години (поки залишаємо порожнім)
+        JsonObject jsonObject = jsonArray.createNestedObject();
+        jsonObject["name"] = "hour"; // Встановлюємо назву години (можна змінити за потребою)
       }
-      // Сериалізуємо JSON-масив у строку
-      serializeJson(doc, jsonData);
-    } else {
-      // Якщо SD карта недоступна, відправляємо порожній масив
-      jsonData = "[]";
-    }
 
-    // Відправляємо JSON-відповідь
-    request->send(200, "application/json", jsonData);
+      // Сериалізуємо JSON-об'єкт у строку
+      String jsonData;
+      serializeJson(doc, jsonData);
+      // Відправляємо JSON-відповідь
+      request->send(200, "application/json", jsonData);
+    } else {
+      // Якщо SD карта недоступна, відправляємо порожній об'єкт
+      request->send(200, "application/json", "{}");
+    }
   });
 
   // Сервер для завантаження files з SD-карти
@@ -887,10 +881,9 @@ void setupWebServer() {
 
   // Інші наявні маршрути
   server.on("/saveWifi", HTTP_POST, [](AsyncWebServerRequest *request) {
-    if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
-      String ssid = request->getParam("ssid", true)->value();
+      String ssid = request->getParam("ssid")->value();
 
-      String password = request->getParam("password", true)->value();
+      String password = request->getParam("password")->value();
 
       ssid.toCharArray(wifiSSID, sizeof(wifiSSID));
       password.toCharArray(wifiPassword, sizeof(wifiPassword));
@@ -901,16 +894,13 @@ void setupWebServer() {
       preferences.end();
 
       request->send(200);
-    } else {
-      request->send(400);
-    }
   });
 
   server.on("/saveWeather", HTTP_POST, [](AsyncWebServerRequest *request) {
-    if (request->hasParam("apiKey", true) && request->hasParam("latitude", true) && request->hasParam("longitude", true)) {
-      String NapiKey = request->getParam("apiKey", true)->value();
-      String Nlatitude = request->getParam("latitude", true)->value();
-      String Nlongitude = request->getParam("longitude", true)->value();
+    
+      String NapiKey = request->getParam("apiKey")->value();
+      String Nlatitude = request->getParam("latitude")->value();
+      String Nlongitude = request->getParam("longitude")->value();
       NapiKey.toCharArray(apiKey, sizeof(apiKey));
       Nlatitude.toCharArray(latitude, sizeof(latitude));
       Nlongitude.toCharArray(longitude, sizeof(longitude));
@@ -923,9 +913,6 @@ void setupWebServer() {
 
 
       request->send(200);
-    } else {
-      request->send(400);
-    }
   });
 
   server.on("/start_work", HTTP_PATCH, [](AsyncWebServerRequest *request) {
@@ -933,7 +920,6 @@ void setupWebServer() {
     preferences.putBool("isWorking", true);  // Точка доступу
     preferences.end();
     isWorking = true;
-    Serial.printf("Data updated: %s\n", isWorking ? "true" : "false");
     request->send(200);
   });
 
@@ -942,7 +928,6 @@ void setupWebServer() {
     preferences.putBool("isWorking", false);  // Точка доступу
     preferences.end();
     isWorking = false;
-    Serial.printf("Data updated: %s\n", isWorking ? "true" : "false");
     request->send(200, "/");
   });
 
@@ -984,7 +969,6 @@ void startAccessPoint() {
 void ledTask(void *parameter) {
   unsigned long startMillis = millis();
   while (!ledStopFlag && millis() - startMillis < blinkDuration) {
-
     if (mode == 0) {
       digitalWrite(LED_PIN, !digitalRead(LED_PIN));  // Миготіння
       delay(500);
@@ -992,6 +976,7 @@ void ledTask(void *parameter) {
       digitalWrite(LED_PIN, HIGH);  // Постійне світіння
       delay(500);
     }
+    vTaskDelay(1);  // Yield control back to the OS
   }
   digitalWrite(LED_PIN, LOW);
   ledStopFlag = true;
