@@ -43,7 +43,6 @@ namespace Invertor_sim
 
             chart.Series["Data"].Points.Clear(); // Очищуємо графік
             currentXValue = 0;
-
             // Додаємо точки з параметра
             if (parameterValues.ContainsKey(currentParameter))
             {
@@ -52,6 +51,15 @@ namespace Invertor_sim
                     chart.Series["Data"].Points.AddXY(currentXValue, value);
                     currentXValue++;
                 }
+                if (float.TryParse(minBox.Text, out float minValue) &&
+               float.TryParse(maxBox.Text, out float maxValue) && minValue <= maxValue)
+                {
+                    chart.ChartAreas[0].AxisY.Minimum = minValue;
+                    chart.ChartAreas[0].AxisY.Maximum = maxValue;
+                }
+
+
+                
             }
 
             UpdateAverageLabel();
@@ -151,7 +159,9 @@ namespace Invertor_sim
                 {
                     Time = currentTime.ToString("H:mm:ss"),
                     PowerConsumption = GetParameterValueAtCurrentX(Parameter.PowerConsumption.ToString(), xValue),
-                    SolarGeneration = GetParameterValueAtCurrentX(Parameter.SolarGeneration.ToString(), xValue)
+                    SolarGeneration = GetParameterValueAtCurrentX(Parameter.SolarGeneration.ToString(), xValue),
+                    Temperature = GetParameterValueAtCurrentX(Parameter.Temperature.ToString(), xValue),
+                    Сloudiness = GetParameterValueAtCurrentX(Parameter.Сloudiness.ToString(), xValue),
                 };
                 inverterDataList.Add(data);
                 currentTime = currentTime.AddMinutes(1);
@@ -176,21 +186,51 @@ namespace Invertor_sim
         private void SaveDataToFile()
         {
             string date = dateTimePicker.Value.ToString("dd-MM-yyyy");
-            string fileName = $"{date}.json";
+            string folderPath = Path.Combine(Directory.GetCurrentDirectory(), date);
+
+            // Перевіряємо, чи існує папка, і створюємо, якщо не існує
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
 
             // Округлюємо кожне значення перед серіалізацією
             var roundedInverterDataList = inverterDataList.Select(data => new InverterData
             {
                 Time = data.Time,
                 PowerConsumption = (float)Math.Round(data.PowerConsumption, 2),
-                SolarGeneration = (float)Math.Round(data.SolarGeneration, 2)
+                SolarGeneration = (float)Math.Round(data.SolarGeneration, 2),
+                Temperature = (float)Math.Round(data.Temperature, 2),
+                Сloudiness = (float)Math.Round(data.Сloudiness, 2),
             }).ToList();
 
-            string jsonString = JsonConvert.SerializeObject(roundedInverterDataList, Formatting.Indented);
+            // Перевіряємо, чи маємо потрібну кількість записів (1440 записів)
+            if (roundedInverterDataList.Count != 1440)
+            {
+                MessageBox.Show("Invalid number of records. Expected 1440 records.");
+                return;
+            }
 
-            File.WriteAllText(fileName, jsonString);
-            MessageBox.Show($"Data saved to {fileName}");
+            // Розбиваємо список на групи по 60 записів (за кожну годину)
+            for (int hour = 0; hour < 24; hour++)
+            {
+                // Отримуємо 60 записів для поточної години
+                var hourlyData = roundedInverterDataList.Skip(hour * 60).Take(60).ToList();
+
+                // Формуємо назву файлу для поточної години (з префіксом '0' для годин від 0 до 9)
+                string fileName = $"{hour.ToString("D2")}.json";
+                string filePath = Path.Combine(folderPath, fileName);
+
+                // Серіалізуємо дані в формат JSON
+                string jsonString = JsonConvert.SerializeObject(hourlyData, Formatting.Indented);
+
+                // Записуємо дані у файл
+                File.WriteAllText(filePath, jsonString);
+            }
+
+            MessageBox.Show($"Data saved to folder {folderPath}");
         }
+
 
         private void sim_Click(object sender, EventArgs e)
         {

@@ -7,15 +7,17 @@ import styled from 'styled-components';
 import { useForm } from 'react-hook-form';
 
 const TextLabel = styled.label`
-    font-size: 15px;
+    font-size: 30px;
     /* font-weight: bold; */
-    font-family: 'blankenburg';
+    padding: 5px;
+    margin: 2px;
+    font-family: 'TMVinograd-Regular';
 `;
 
 const ActionButton = styled.button`
-    font-size: 15px;
+    font-size: 30px;
     font-weight: bold;
-    font-family: 'blankenburg';
+    font-family: 'TMVinograd-Regular';
 
     &:hover {
         background-color: #dd7311;
@@ -23,8 +25,8 @@ const ActionButton = styled.button`
 `;
 
 const SInput = styled.input`
-    font-size: 15px;
-    font-family: 'blankenburg';
+    font-size: 30px;
+    font-family: 'TMVinograd-Regular';
     font-weight: bold;
     width: 200px;
 `;
@@ -56,6 +58,8 @@ const FlexCol = styled.div`
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    margin-left:auto;
+    margin-right:auto;
 `;
 
 const CenteredContainer = styled.div`
@@ -63,7 +67,6 @@ const CenteredContainer = styled.div`
     justify-content: start;
     align-items: center;
     overflow-y: scroll;
-
     /* height: 100vh; */
     min-width: 500px;
     width: 100vw;
@@ -321,10 +324,12 @@ const App: React.FC = () => {
                         <TextLabel>Solar Generation: {status.solarGeneration}</TextLabel><br />
                         <TextLabel>Power Consumption: {status.powerConsumption}</TextLabel><br />
                     </FlexCol>)}
+                     {files &&  <FilesDisplay files={files}/>}
                 </FlexCol>
 
-                {files &&  <FilesDisplay files={files}/>}
+                
             </FlexCol>
+           
         </CenteredContainer>
     );
 };

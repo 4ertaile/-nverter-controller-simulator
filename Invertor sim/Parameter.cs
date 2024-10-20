@@ -9,7 +9,9 @@ namespace Invertor_sim
     enum Parameter
     {
         PowerConsumption,
-        SolarGeneration
+        SolarGeneration,
+        Temperature,
+        Сloudiness
 
     }
 }
