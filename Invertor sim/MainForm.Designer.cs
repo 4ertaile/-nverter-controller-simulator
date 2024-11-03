@@ -67,7 +67,6 @@ namespace Invertor_sim
             Invertor_sim.Parameter.SolarGeneration,
             Invertor_sim.Parameter.Temperature,
             Invertor_sim.Parameter.Сloudiness});
-
             this.parameterComboBox.Location = new System.Drawing.Point(7, 32);
             this.parameterComboBox.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
             this.parameterComboBox.Name = "parameterComboBox";
@@ -169,7 +168,7 @@ namespace Invertor_sim
             // sim
             // 
             this.sim.Location = new System.Drawing.Point(569, 6);
-            this.sim.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.sim.Margin = new System.Windows.Forms.Padding(2);
             this.sim.Name = "sim";
             this.sim.Size = new System.Drawing.Size(84, 23);
             this.sim.TabIndex = 10;
@@ -181,6 +180,7 @@ namespace Invertor_sim
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
             this.ClientSize = new System.Drawing.Size(661, 455);
             this.Controls.Add(this.sim);
             this.Controls.Add(this.label2);

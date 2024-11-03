@@ -14,7 +14,7 @@
 
 ModbusMaster node;
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "time.windows.com", 10800, 60000);  // Оновлення кожні 60 секунд
+NTPClient timeClient(ntpUDP, "time.windows.com", 7200, 60000);  // Оновлення кожні 60 секунд
 
 // Параметри WiFi
 const char *apSSID = "ESP32-AP";
@@ -40,11 +40,6 @@ char invertorIp[15] = "";
 char invertorPort[4] = "";
 char invertorId[10] = "";
 
-
-
-
-
-
 float solarGeneration = 0, powerConsumption = 0;
 bool isWorking = false, timeSynced = false;
 unsigned long previousMillisForModbus = 0;
@@ -54,8 +49,8 @@ String Wifi_status = "";
 const int chipSelect = 5;  // Пін CS для SD-карти
 String currentFileName = "";
 String fileStatus = "";
-unsigned long lastUpdateTime = 0;  // Час останнього успішного оновлення у форматі HH:MM:SS
-bool weatherUpdated = false;       // Чи були успішно оновлені дані
+unsigned long lastUpdateTime = 0;
+bool weatherUpdated = false;  // Чи були успішно оновлені дані
 String weatherUpdatedStatus = "";
 
 
@@ -72,10 +67,19 @@ struct EnergyData {
   float PowerConsumption;
   float SolarGeneration;
   float Temperature;
-  float Сloudiness;
+  float Cloudiness;
+};
+// Структура для зберігання даних про прогноз
+struct ForecastData {
+  String Time;
+  float Temperature;
+  float Cloudiness;
 };
 std::vector<String> findFilesByDayOfWeekAndTime(String dayOfWeek, int daysToCheck, String time);
 std::vector<String> findFilesForLastDays(int daysToCheck, String time);
+std::vector<String> getCacheFilePaths(String inputDate, String fileType);
+std::vector<ForecastData> getForecastData(time_t startTime, int minutes);
+std::vector<ForecastData> loadForecastData(int forecastMinutes);
 void setup() {
   pinMode(LED_PIN, OUTPUT);  // Діод як вихід
   Serial.begin(9600);
@@ -137,7 +141,30 @@ void setup() {
   for (const String &filePath1 : filePaths1) {
     Serial.println(filePath1);
   }
-  calculateAndStoreAverages(filePaths1,"20-10-2024", "last-25" );
+  calculateAndStoreAverages(filePaths1, "20-10-2024", "last-25");
+  std::vector<String> filePaths2 = getCacheFilePaths("20-10-2024", "last-25");
+  for (const String &filePath2 : filePaths2) {
+    Serial.println(filePath2);
+  }
+
+  DynamicJsonDocument forecastData = fetchWeatherForecast();
+  saveForecastToFiles(forecastData, 335);
+   printWeatherForecast(forecastData);
+
+  int forecastMinutes = 335;  // Наприклад, 120 хвилин
+  std::vector<ForecastData> forecastData1 = loadForecastData(forecastMinutes);
+  if (!forecastData1.empty()) {
+    for (const ForecastData &data : forecastData1) {
+      Serial.print("Time: ");
+      Serial.print(data.Time);
+      Serial.print(", Temperature: ");
+      Serial.print(data.Temperature);
+      Serial.print(", Cloudiness: ");
+      Serial.println(data.Cloudiness);
+    }
+  } else {
+    Serial.println("LOL");
+  }
 }
 // Функція для повернення назви дня тижня
 String getDayOfWeek(int dayIndex) {
@@ -152,7 +179,312 @@ String getDayOfWeek(int dayIndex) {
     default: return "";
   }
 }
+//////
 
+
+
+
+// Функція для отримання прогнозу з OpenWeather API
+DynamicJsonDocument fetchWeatherForecast() {
+  DynamicJsonDocument forecastData(2048);
+  HTTPClient http;
+
+  String url = "http://api.openweathermap.org/data/2.5/forecast?lat=" + String(latitude, 6) + "&lon=" + String(longitude, 6) + "&appid=" + apiKey + "&units=metric";
+  http.begin(url);
+  int httpResponseCode = http.GET();
+
+  if (httpResponseCode == 200) {
+    String payload = http.getString();
+    deserializeJson(forecastData, payload);
+  } else {
+    Serial.print("Error in fetching weather data: ");
+    Serial.println(httpResponseCode);
+  }
+
+  http.end();
+  return forecastData;
+}
+void printWeatherForecast(DynamicJsonDocument forecastData) {
+  // Перевіряємо, чи масив даних прогнозу є правильним
+  if (!forecastData.containsKey("list") || !forecastData["list"].is<JsonArray>()) {
+    Serial.println("No forecast data available.");
+    return;
+  }
+
+  // Отримуємо розмір масиву прогнозів
+  int forecastSize = forecastData["list"].size();
+
+  // Проходимо по кожному запису в масиві прогнозів
+  for (int i = 0; i < forecastSize; ++i) {
+    // Отримуємо час у форматі UNIX-мітки часу
+    time_t forecastTime = static_cast<time_t>(forecastData["list"][i]["dt"]);
+    // Конвертуємо UNIX-час у формат дати і часу
+    struct tm *timeInfo = localtime(&forecastTime);
+    char timeBuffer[20];
+    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeInfo);
+
+    // Отримуємо температуру та хмарність
+    float temperature = forecastData["list"][i]["main"]["temp"];
+    int clouds = forecastData["list"][i]["clouds"]["all"];
+
+    // Виводимо значення часу, температури та хмарності
+    Serial.print("Time: ");
+    Serial.print(timeBuffer);
+    Serial.print(" | Temperature: ");
+    Serial.print(temperature);
+    Serial.print("°C | Cloudiness: ");
+    Serial.print(clouds);
+    Serial.println("%");
+  }
+}
+
+float interpolate(float startValue, float endValue, int startMinute, int targetMinute, int endMinute) {
+  if (endMinute == startMinute) {
+    return startValue;
+  }
+  return startValue + (endValue - startValue) * (targetMinute - startMinute) / (endMinute - startMinute);
+}
+
+void printTimeInHHMMSS(time_t rawTime) {
+  struct tm *timeInfo = localtime(&rawTime);
+  char timeString[9];  // hh:mm:ss
+  strftime(timeString, sizeof(timeString), "%H:%M:%S", timeInfo);
+  Serial.println(timeString);
+}
+
+////////
+void saveForecastToFiles(DynamicJsonDocument forecastData, int forecastMinutes) {
+  if (!SD.begin()) {
+    Serial.println("SD Card initialization failed!");
+    return;
+  }
+
+  // Отримуємо поточний час
+  time_t rawTime = timeClient.getEpochTime();
+  struct tm *timeInfo = localtime(&rawTime);
+  char currentDate[11];
+  strftime(currentDate, sizeof(currentDate), "%d-%m-%Y", timeInfo);
+
+  int forecastSize = forecastData["list"].size();
+  time_t startForecastTime = rawTime - (rawTime % 60);  // Поточна хвилина
+  time_t endForecastTime = startForecastTime + forecastMinutes * 60;
+
+  bool dataStock = false;
+  bool newDay = false;
+  // Перебір точок прогнозу
+  for (int i = 0; i < forecastSize - 1; ++i) {
+    if (newDay) {
+      // Збільшення дати на 1 день
+      timeInfo->tm_mday += 1;
+      // Обробка зміни місяця і року
+      mktime(timeInfo);  // Оновлення timeInfo, щоб врахувати зміни в місяці та році
+      strftime(currentDate, sizeof(currentDate), "%d-%m-%Y", timeInfo);
+      newDay = false;
+    }
+
+    time_t currentTime = static_cast<time_t>(forecastData["list"][i]["dt"]);
+    time_t nextTime = static_cast<time_t>(forecastData["list"][i + 1]["dt"]);
+    if (dataStock) break;
+    if (currentTime <= endForecastTime && endForecastTime < nextTime) dataStock = true;
+
+    struct tm *currentForecastTime = localtime(&currentTime);
+    int startMinute = currentForecastTime->tm_hour * 60 + currentForecastTime->tm_min;
+
+    if (nextTime == 1730678400) {  // 1730678400 = 00:00:00
+      nextTime -= 30;
+      newDay = true;
+    }
+    struct tm *nextForecastTime = localtime(&nextTime);
+    int endMinute = nextForecastTime->tm_hour * 60 + nextForecastTime->tm_min;
+
+    // Отримуємо початкові та кінцеві температури
+    float startTemp = forecastData["list"][i]["main"]["temp"];
+    float endTemp = forecastData["list"][i + 1]["main"]["temp"];
+    float startClouds = forecastData["list"][i]["clouds"]["all"];
+    float endClouds = forecastData["list"][i + 1]["clouds"]["all"];
+
+    if (newDay)
+      endMinute++;
+    // Підготовка до запису в файл для поточної години
+    for (int hour = startMinute / 60; hour < endMinute / 60; ++hour) {
+      // Формуємо ім'я файлу
+      String folderName = "/cache/forecast/" + String(currentDate);
+
+      createDirectories(folderName);
+      char fileName[20];
+      sprintf(fileName, "%02d.json", hour);
+
+      // Зчитуємо існуючий файл, якщо він є
+      StaticJsonDocument<4096> existingData;
+      File file = SD.open(folderName + "/" + fileName, FILE_READ);
+      if (file) {
+        DeserializationError error = deserializeJson(existingData, file);
+        file.close();
+        if (error) {
+          Serial.println("Error reading JSON from file");
+          existingData.clear();
+        }
+      }
+
+      // Масив для зберігання оновлених хвилинних даних
+      StaticJsonDocument<128> updatedMinuteForecasts[60];
+      int forecastCount = 0;
+
+      // Заповнення масиву хвилинного прогнозу
+      for (int minute = 0; minute < 60; ++minute) {
+        int absoluteMinute = hour * 60 + minute;
+        bool updated = false;
+
+        if (absoluteMinute >= startMinute && absoluteMinute < endMinute) {
+
+          float temp = interpolate(startTemp, endTemp, startMinute, absoluteMinute, endMinute);
+          float clouds = interpolate(startClouds, endClouds, startMinute, absoluteMinute, endMinute);
+
+          if (!isnan(temp) && !isnan(clouds)) {
+            char timeBuffer[9];
+            sprintf(timeBuffer, "%02d:%02d:00", hour, minute);
+            updatedMinuteForecasts[minute]["Time"] = String(timeBuffer);
+            updatedMinuteForecasts[minute]["Temperature"] = temp;
+            updatedMinuteForecasts[minute]["Cloudiness"] = clouds;
+            updated = true;
+          }
+        }
+
+        // Якщо оновлених даних немає, залишаємо старі, якщо вони існують
+        if (!updated && existingData.containsKey(String(minute))) {
+          updatedMinuteForecasts[minute] = existingData[String(minute)];
+          char timeBuffer[9];
+          sprintf(timeBuffer, "%02d:%02d:00", hour, minute);
+        }
+        forecastCount++;
+      }
+
+      // Запис оновлених даних у файл
+      file = SD.open(folderName + "/" + fileName, FILE_WRITE);
+      if (!file) {
+        Serial.println("Failed to open file for writing");
+        return;
+      }
+
+      // Формуємо JSON-масив і записуємо в файл
+      file.print("[");
+      for (int j = 0; j < forecastCount; j++) {
+        serializeJson(updatedMinuteForecasts[j], file);
+        if (j < forecastCount - 1) file.print(",");
+      }
+      file.print("]");
+      file.close();  // Закриваємо файл після запису
+    }
+  }
+}
+
+///////
+std::vector<ForecastData> loadForecastData(int forecastMinutes) {
+  std::vector<ForecastData> forecastArray;
+
+  // Отримуємо поточний час та розраховуємо кінцевий час
+  time_t rawTime = timeClient.getEpochTime();
+  struct tm *timeInfo = localtime(&rawTime);
+  time_t endForecastTime = rawTime + forecastMinutes * 60;
+
+  // Розраховуємо шляхи до файлів, які необхідно зчитати
+  std::vector<String> requiredFilePaths;
+  int initialMinuteOffset = timeInfo->tm_min;
+  int hoursToCover = (forecastMinutes + initialMinuteOffset + 59) / 60;
+
+  // Формуємо список шляхів до файлів, які потрібно зчитати
+  for (int hourOffset = 0; hourOffset < hoursToCover; hourOffset++) {
+    char currentDate[11];
+    strftime(currentDate, sizeof(currentDate), "%d-%m-%Y", timeInfo);
+
+    char fileName[30];
+    sprintf(fileName, "/cache/forecast/%s/%02d.json", currentDate, timeInfo->tm_hour);
+    requiredFilePaths.push_back(String(fileName));
+
+    // Переходимо на наступну годину
+    timeInfo->tm_hour++;
+    if (timeInfo->tm_hour >= 24) {
+      timeInfo->tm_hour = 0;
+      timeInfo->tm_mday++;
+      mktime(timeInfo);  // Оновлення структури `tm` для коректної дати
+    }
+  }
+
+  // Прапор для початку запису даних, коли знайдений час буде більшим або рівним поточному часу
+  bool startRecording = false;
+
+  // Зчитування даних з файлів
+  for (int j = 0; j < requiredFilePaths.size(); j++) {
+    File file = SD.open(requiredFilePaths[j].c_str(), FILE_READ);
+    if (!file) {
+      Serial.print("Could not open file: ");
+      Serial.println(requiredFilePaths[j]);
+      continue;  // Пропускаємо файл, якщо його не вдалося відкрити
+    }
+
+    DynamicJsonDocument hourData(6000);
+    DeserializationError error = deserializeJson(hourData, file);
+    file.close();
+    if (error) {
+      Serial.print("Failed to parse JSON in ");
+      Serial.println(requiredFilePaths[j]);
+      continue;  // Пропускаємо файл, якщо є помилка в парсингу
+    }
+
+    JsonArray minuteEntries = hourData.as<JsonArray>();
+
+    for (int i = 0; i < minuteEntries.size(); i++) {
+      JsonObject minuteEntry = minuteEntries[i];
+      // Перевірка наявності полів "Temperature" і "Cloudiness"
+      if (!minuteEntry.containsKey("Temperature") || !minuteEntry.containsKey("Cloudiness")) {
+        continue;  // Пропускаємо запис, якщо відсутні необхідні дані
+      }
+
+      // Отримання часу запису з файлу
+      const char *entryTimeStr = minuteEntry["Time"];
+
+      // Виділяємо годину та хвилини з рядка
+      int entryHour = (entryTimeStr[0] - '0') * 10 + (entryTimeStr[1] - '0');
+      int entryMinute = (entryTimeStr[3] - '0') * 10 + (entryTimeStr[4] - '0');
+
+      // Використовуємо поточну дату, щоб задати тільки години та хвилини
+      struct tm entryTime = *timeInfo;  // Копіюємо поточну дату
+      entryTime.tm_hour = entryHour;
+      entryTime.tm_min = entryMinute;
+      entryTime.tm_sec = 0;  // Секунди встановимо в 0
+
+      time_t entryEpochTime = mktime(&entryTime);
+
+      // Починаємо запис, якщо час запису більший або рівний поточному часу
+      if (!startRecording && entryEpochTime >= rawTime && j == 0) {
+        startRecording = true;
+      }
+
+      // Якщо старт запису почався, але час вже вийшов за межі шуканого інтервалу, закінчуємо обробку поточного файлу
+      if (startRecording && entryEpochTime > endForecastTime && requiredFilePaths.size() - 1 == j) {
+        return forecastArray;
+      }
+
+      // Додаємо структуру в масив, якщо почався запис
+      if (startRecording) {
+        ForecastData data;
+        data.Time = String(entryTimeStr);
+        data.Temperature = minuteEntry["Temperature"].as<float>();
+        data.Cloudiness = minuteEntry["Cloudiness"].as<float>();
+        forecastArray.push_back(data);
+      }
+    }
+  }
+
+  return forecastArray;
+}
+
+
+
+
+
+
+////////
 // Функція для отримання температури та хмарності
 void getWeatherData(float lat, float lon, float &temperature, int &cloudiness) {
   String units = "metric";
@@ -219,11 +551,11 @@ struct SetEnergyData {
 // Функція для створення всіх директорій на основі повного шляху
 void createDirectories(String path) {
   String subPath = "";
-  
+
   for (int i = 0; i < path.length(); i++) {
     char c = path.charAt(i);
     subPath += c;
-    
+
     // Коли зустрічаємо '/', перевіряємо чи існує ця папка, і створюємо її за необхідності
     if (c == '/' && !SD.exists(subPath)) {
       SD.mkdir(subPath);
@@ -238,7 +570,7 @@ void createDirectories(String path) {
 
 // Функція для отримання середніх значень та запису у новий файл
 void calculateAndStoreAverages(std::vector<String> filePaths, String inputDate, String fileType) {
-  if(!sDIsOk())
+  if (!sDIsOk())
     return;
   SetEnergyData energyData[60];  // Масив для 60 записів на кожну хвилину
   // Формуємо шлях для нового файлу на основі вхідних параметрів дати, типу файлу і часу
@@ -249,7 +581,7 @@ void calculateAndStoreAverages(std::vector<String> filePaths, String inputDate, 
   createDirectories(newDir);
 
   // Отримуємо годину з назви файлу (наприклад, hh.json)
-  if(filePaths.size() < 1){
+  if (filePaths.size() < 1) {
     Serial.println("Пустий перечень вхідних даних");
     return;
   }
@@ -361,124 +693,49 @@ void calculateAndStoreAverages(std::vector<String> filePaths, String inputDate, 
   Serial.println("Дані успішно записані у файл: " + outputFile);
 }
 
+#include <SD.h>
+#include <vector>
+
+// Функція для пошуку всіх файлів у папці за вказаною датою і типом файлу
+std::vector<String> getCacheFilePaths(String inputDate, String fileType) {
+  std::vector<String> filePaths;
+  if (!sDIsOk()) {
+    return {};
+  }
+  // Формуємо шлях до папки на основі вхідних параметрів дати і типу файлу
+  String yearMonth = inputDate.substring(3, 5) + "-" + inputDate.substring(6, 10);  // Формуємо папку виду mm-yyyy
+  String fullDate = inputDate + "-" + fileType;                                     // Формуємо папку виду dd-mm-yyyy-long-everage або інший варіант
+  String dirPath = "/cache/" + yearMonth + "/" + fullDate;                          // Повний шлях до папки
+
+  if (!SD.exists(dirPath)) {
+    Serial.println("Папка не існує: " + dirPath);
+    return filePaths;  // Повертаємо порожній масив, якщо папка не існує
+  }
+
+  // Відкриваємо папку і зчитуємо всі файли всередині
+  File dir = SD.open(dirPath);
+  if (!dir) {
+    Serial.println("Не вдалося відкрити папку: " + dirPath);
+    return filePaths;
+  }
+
+  File file = dir.openNextFile();
+  while (file) {
+    // Перевіряємо, чи є об'єкт файлом, а не папкою
+    if (!file.isDirectory()) {
+      String fileName = file.name();
+      // Додаємо шлях до файлу в список
+      filePaths.push_back(dirPath + "/" + fileName);
+    }
+    file = dir.openNextFile();  // Переходимо до наступного файлу
+  }
+
+  dir.close();  // Закриваємо папку після зчитування
+
+  return filePaths;
+}
 
 
-// EnergyData processFilesAndGetAverage(std::vector<String> filePaths, String searchTime) {
-//   if (!sDIsOk()) {
-//     return {};
-//   }
-//   float totalPowerConsumption = 0.0;
-//   float totalSolarGeneration = 0.0;
-//   int count = 0;
-//   const size_t bufferSize = 14000;  // Размер буфера для чтения файла
-//   const size_t bufferSizeForStruct = 256;
-
-//   for (const String &filePath : filePaths) {
-//     File file = SD.open(filePath, FILE_READ);
-//     if (!file) {
-//       Serial.println("Failed to open file: " + filePath);
-//       continue;
-//     }
-
-//     // Создаем буфер для чтения части файла
-//     String buffer = "[";
-//     int braceCount = 0;  // Счетчик для символов '}'
-//     String lastStructBuffer = "";
-//     bool found = false;
-
-//     // Читаем файл порциями
-//     while (file.available() && buffer.length() < bufferSize - 1) {  // -1 для добавления ']'
-//       char ch = (char)file.read();
-//       if (buffer.length() == 1 && ch == ',') {
-//         continue;
-//       }
-//       if (braceCount == 119) {
-//         lastStructBuffer += ch;
-//       }
-//       // Увеличиваем счетчик, если встречаем '}'
-//       if (ch == '}') {
-//         braceCount++;
-//       }
-//       // Если символ не '[' и ']', добавляем его в буфер
-//       if (ch != '[' && ch != ']') {
-//         buffer += ch;
-//       }
-//       // Если буфер не пустой, завершаем массив JSON
-//       if (buffer.length() > 1 && (braceCount >= 120 || !file.available())) {  // Более 1 для учета '[' и ']'
-//         buffer += "]";                                                        // Завершаем массив JSON
-//         lastStructBuffer = lastStructBuffer.substring(1);
-
-//         // Парсим маленький JSON-объект
-//         DynamicJsonDocument smallDoc(bufferSizeForStruct);
-//         DeserializationError smallError = deserializeJson(smallDoc, lastStructBuffer);
-//         if (smallError) {
-//           Serial.println("Error deserializing JSON: " + String(smallError.f_str()));
-//           buffer = "[";
-//           lastStructBuffer = "";
-//           braceCount = 0;  // Счетчик для символов '}'
-//           smallDoc.clear();
-//           continue;
-//         }
-//         JsonObject data = smallDoc.as<JsonObject>();
-//         if (convertToSecondsFromMidnight(data["Time"]) < convertToSecondsFromMidnight(searchTime)) {
-//           buffer = "[";
-//           lastStructBuffer = "";
-//           braceCount = 0;  // Счетчик для символов '}'
-//           smallDoc.clear();
-//           continue;
-//         }
-//         smallDoc.clear();
-
-//         // Парсим основной JSON-объект
-//         DynamicJsonDocument largeDoc(bufferSize);
-//         DeserializationError largeError = deserializeJson(largeDoc, buffer);
-//         if (largeError) {
-//           Serial.println("Error deserializing JSON: " + String(largeError.f_str()));
-//           buffer = "[";
-//           lastStructBuffer = "";
-//           braceCount = 0;  // Счетчик для символов '}'
-//           smallDoc.clear();
-//           continue;
-//         }
-
-//         // Шукаємо запис із відповідним часом
-//         JsonArray dataArray = largeDoc.as<JsonArray>();
-//         for (JsonObject record : dataArray) {
-//           if (record["Time"] == searchTime) {
-//             totalPowerConsumption += record["PowerConsumption"].as<float>();
-//             totalSolarGeneration += record["SolarGeneration"].as<float>();
-//             count++;
-//             found = true;
-//             break;  // Если нашли соответствующий запись, выходим из цикла
-//           }
-//         }
-//         largeDoc.clear();
-//         buffer = "[";
-//         lastStructBuffer = "";
-//         braceCount = 0;  // Счетчик для символов '}'
-//       }
-//       if (found) {
-//         break;
-//       }
-//     }
-//     file.close();
-//   }
-
-//   // Обчислюємо середнє значення
-//   EnergyData result;
-//   result.Time = searchTime;
-
-//   if (count > 0) {
-//     result.PowerConsumption = totalPowerConsumption / count;
-//     result.SolarGeneration = totalSolarGeneration / count;
-//   } else {
-//     result.PowerConsumption = 0.0;
-//     result.SolarGeneration = 0.0;
-//     Serial.println("No matching records found for time: " + searchTime);
-//   }
-
-//   return result;
-// }
 
 // Допоміжна функція для перетворення рядка "dd-mm-yyyy" на структуру часу tmElements_t
 tmElements_t parseDate(String dateStr) {
@@ -770,9 +1027,8 @@ void writeDataToSD(String requestTime) {
   String date = getFormattedDate();
   String yearMonthFolder = "/" + date.substring(5, 7) + "_" + date.substring(0, 4);                          // MM_YYYY
   String dayFolder = "/" + date.substring(8, 10) + "-" + date.substring(5, 7) + "-" + date.substring(0, 4);  // DD-MM-YYYY
-    // Витягуємо годину з часу HH:MM:SS
-  String hour = requestTime.substring(0, 2);  // Витягуємо "HH"
-  String fileName = hour + ".json";           //Формат: HH.json
+  String hour = requestTime.substring(0, 2);                                                                 // Витягуємо "HH"
+  String fileName = hour + ".json";                                                                          //Формат: HH.json
 
   // Створюємо папку року і місяця, якщо вона не існує
   if (!SD.exists(yearMonthFolder)) {
@@ -929,36 +1185,46 @@ void setupWebServer() {
     request->send(200, "text/html", html);
   });
   server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request) {
-    DynamicJsonDocument doc(1024);  // Створюємо JSON документ
+    DynamicJsonDocument doc(4096);  // Створюємо більший JSON документ
 
-    // if (sDIsOk()) {
-    // Якщо SD карта готова, отримуємо файли
-    //   std::vector<String> files = findFilesForLastDays(25);
+    if (sDIsOk()) {  // Якщо SD карта готова, отримуємо файли
+      std::vector<String> files = getCacheFilePaths("20-10-2024", "last-25");
 
-    //   // Додаємо дані до JSON
-    //   for (const String &file : files) {
-    //     // Витягуємо назву дня з імені файлу (припустимо, формат: YYYY-MM-DD.json)
-    //     String dayName = file.substring(9, file.length() - 5);  // Витягнути частину без розширення .json
+      // Для кожного файлу з масиву
+      for (const String &file : files) {
+        // Приклад шляху файлу: "/cache/2024-09/21-09-2024-fileType/15.json"
+        int lastSlash = file.lastIndexOf('/');
+        int secondLastSlash = file.lastIndexOf('/', lastSlash - 1);
 
-    //     // Створюємо масив для даних дня
-    //     JsonArray jsonArray = doc.createNestedArray(dayName);
+        // Витягуємо назву папки з "21-09-2024-fileType"
+        String dayName = file.substring(secondLastSlash + 1, lastSlash);
 
-    //     // Додаємо об'єкт з назвою години (поки залишаємо порожнім)
-    //     JsonObject jsonObject = jsonArray.createNestedObject();
-    //     jsonObject["name"] = "hour";  // Встановлюємо назву години (можна змінити за потребою)
-    //   }
+        // Витягуємо годину з назви файлу, наприклад, "15" з "15.json"
+        String hour = file.substring(lastSlash + 1, file.length());
 
-    //   // Сериалізуємо JSON-об'єкт у строку
-    //   String jsonData;
-    //   serializeJson(doc, jsonData);
-    //   // Відправляємо JSON-відповідь
-    //   request->send(200, "application/json", jsonData);
-    // } else {
-    //   // Якщо SD карта недоступна, відправляємо порожній об'єкт
-    //   request->send(200, "application/json", "{}");
-    // }
-    request->send(200, "application/json", "{}");
+        // Перевіряємо, чи вже існує такий день у JSON
+        JsonArray dayArray;
+        if (doc.containsKey(dayName)) {
+          dayArray = doc[dayName].as<JsonArray>();
+        } else {
+          dayArray = doc.createNestedArray(dayName);  // Створюємо масив для нового дня
+        }
+        // Додаємо годину до масиву
+        JsonObject jsonObject = dayArray.createNestedObject();
+        jsonObject["name"] = hour;  // Додаємо годину до JSON
+      }
+
+      // Сериалізуємо JSON-об'єкт у строку
+      String jsonData;
+      serializeJson(doc, jsonData);
+      // Відправляємо JSON-відповідь
+      request->send(200, "application/json", jsonData);
+    } else {
+      // Якщо SD карта недоступна, відправляємо порожній об'єкт
+      request->send(200, "application/json", "{}");
+    }
   });
+
 
   // Сервер для завантаження files з SD-карти
   // right is on sd card

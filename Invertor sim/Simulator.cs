@@ -197,6 +197,7 @@ namespace Invertor_sim
             if (messageRecived)
             {
                 listBoxReceivedCommands.Items.Add(recivetmess);
+                recivetmess = "";
                 messageRecived = false;
             }
             storage.SyncInverterToModbus();
@@ -329,7 +330,7 @@ namespace Invertor_sim
         private static void OnStorageOperationOccurred(object sender, StorageEventArgs<ushort> e)
         {
             // Оновлення даних у реєстрах при зміні Modbus
-            recivetmess = "Operation:" + e.Operation  + ", Starting Address: " + e.StartingAddress + ", Points: " + string.Join(", ", e.Points);
+            recivetmess += " Operation:" + e.Operation + ", Starting Address: " + e.StartingAddress + ", Points: " + string.Join(", ", e.Points);
             messageRecived = true;
             if (e.Operation == PointOperation.Read)
             {
@@ -347,87 +348,6 @@ namespace Invertor_sim
         }
 
 
-        //переписати і використати в методі отримання повідомлення
-        private void DataReceivedHandler(object sender, SerialDataReceivedEventArgs e)
-        {
-            if (serialPort == null || !serialPort.IsOpen)
-                return;
-
-            byte[] buffer = new byte[serialPort.BytesToRead];
-            serialPort.Read(buffer, 0, buffer.Length);
-
-
-            Invoke(new Action(() =>
-            {
-                listBoxReceivedCommands.Items.Add("Received: " + BitConverter.ToString(buffer));
-            }));
-
-            try
-            {
-                // Припускаємо, що запит зчитує Holding регістри
-                var request = modbusMaster.ReadHoldingRegisters(1, 0, (ushort)registers.Length);
-
-                if (request.Length > 0)
-                {
-                    ProcessRequest(request);
-                }
-                else
-                {
-                    // Якщо запит на запис
-                    HandleWriteRequest(buffer);
-                }
-            }
-            catch (Exception ex)
-            {
-                Invoke(new Action(() =>
-                {
-                    listBoxReceivedCommands.Items.Add("Error: " + ex.Message);
-                }));
-            }
-        }
-        //видалити через непотрібність
-        private void ProcessRequest(ushort[] request)
-        {
-            for (int i = 0; i < request.Length && i < registers.Length; i++)
-            {
-                registers[i].Value = request[i] / 100f;
-            }
-
-            byte[] byteArray = registers.SelectMany(r => BitConverter.GetBytes(r.GetRegisterData())).ToArray();
-
-            Invoke(new Action(() =>
-            {
-                listBoxSentCommands.Items.Add("Sent: " + BitConverter.ToString(byteArray));
-            }));
-        }
-
-        //видалити метод через непотрібність
-        private void HandleWriteRequest(byte[] buffer)
-        {
-            // Створення пакету для запису в регістри на основі даних із буфера
-            ushort startingAddress = BitConverter.ToUInt16(buffer, 0); // Перші 2 байти — це стартова адреса
-            ushort[] valuesToWrite = new ushort[(buffer.Length - 2) / 2];
-
-            for (int i = 0; i < valuesToWrite.Length; i++)
-            {
-                valuesToWrite[i] = BitConverter.ToUInt16(buffer, 2 + i * 2);
-            }
-
-            // Оновлення значень регістрів
-            for (int i = 0; i < valuesToWrite.Length; i++)
-            {
-                int registerIndex = startingAddress + i;
-                if (registerIndex < registers.Length)
-                {
-                    registers[registerIndex].Value = valuesToWrite[i] / 100f;
-                }
-            }
-
-            Invoke(new Action(() =>
-            {
-                listBoxSentCommands.Items.Add("Processed Write Request for Registers starting at: " + startingAddress);
-            }));
-        }
 
 
         ///////////////
@@ -607,7 +527,6 @@ namespace Invertor_sim
             {
                 try
                 {
-                    serialPort.DataReceived -= DataReceivedHandler;
                     serialPort.Close();
                 }
                 catch (Exception ex)
@@ -1136,7 +1055,6 @@ namespace Invertor_sim
                 {
                     try
                     {
-                        serialPort.DataReceived -= DataReceivedHandler;
                         serialPort.Close();
                         labelStatus.Text = "Disconnected";
                     }

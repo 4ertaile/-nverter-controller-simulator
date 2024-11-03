@@ -8,7 +8,6 @@
         private System.Windows.Forms.ComboBox comboBoxBaudRate;
         private System.Windows.Forms.Label labelStatus;
         private System.Windows.Forms.ListBox listBoxReceivedCommands;
-        private System.Windows.Forms.ListBox listBoxSentCommands;
         private System.Windows.Forms.Label labelCurrentTime;
         private System.Windows.Forms.Button buttonSyncTime;
         private System.Windows.Forms.TextBox textBoxSetTime;
@@ -33,7 +32,6 @@
             this.comboBoxBaudRate = new System.Windows.Forms.ComboBox();
             this.labelStatus = new System.Windows.Forms.Label();
             this.listBoxReceivedCommands = new System.Windows.Forms.ListBox();
-            this.listBoxSentCommands = new System.Windows.Forms.ListBox();
             this.labelCurrentTime = new System.Windows.Forms.Label();
             this.buttonSyncTime = new System.Windows.Forms.Button();
             this.textBoxSetTime = new System.Windows.Forms.TextBox();
@@ -142,6 +140,7 @@
             this.label17 = new System.Windows.Forms.Label();
             this.label18 = new System.Windows.Forms.Label();
             this.label19 = new System.Windows.Forms.Label();
+            this.label20 = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.batteryElemntCount)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.countPanelGrid1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.countPanelGrid2)).BeginInit();
@@ -187,17 +186,11 @@
             // 
             // listBoxReceivedCommands
             // 
-            this.listBoxReceivedCommands.Location = new System.Drawing.Point(20, 60);
+            this.listBoxReceivedCommands.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.listBoxReceivedCommands.Location = new System.Drawing.Point(20, 73);
             this.listBoxReceivedCommands.Name = "listBoxReceivedCommands";
-            this.listBoxReceivedCommands.Size = new System.Drawing.Size(328, 95);
+            this.listBoxReceivedCommands.Size = new System.Drawing.Size(328, 249);
             this.listBoxReceivedCommands.TabIndex = 4;
-            // 
-            // listBoxSentCommands
-            // 
-            this.listBoxSentCommands.Location = new System.Drawing.Point(20, 220);
-            this.listBoxSentCommands.Name = "listBoxSentCommands";
-            this.listBoxSentCommands.Size = new System.Drawing.Size(328, 95);
-            this.listBoxSentCommands.TabIndex = 5;
             // 
             // labelCurrentTime
             // 
@@ -1154,9 +1147,20 @@
             this.label19.TabIndex = 133;
             this.label19.Text = "Registers";
             // 
+            // label20
+            // 
+            this.label20.AutoSize = true;
+            this.label20.Location = new System.Drawing.Point(17, 54);
+            this.label20.Name = "label20";
+            this.label20.Size = new System.Drawing.Size(62, 13);
+            this.label20.TabIndex = 134;
+            this.label20.Text = "Modbus log";
+            // 
             // Simulator
             // 
+            this.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
             this.ClientSize = new System.Drawing.Size(839, 963);
+            this.Controls.Add(this.label20);
             this.Controls.Add(this.label19);
             this.Controls.Add(this.label18);
             this.Controls.Add(this.label17);
@@ -1269,8 +1273,8 @@
             this.Controls.Add(this.comboBoxBaudRate);
             this.Controls.Add(this.labelStatus);
             this.Controls.Add(this.listBoxReceivedCommands);
-            this.Controls.Add(this.listBoxSentCommands);
             this.Controls.Add(this.buttonConfirmTime);
+            this.MinimumSize = new System.Drawing.Size(855, 1002);
             this.Name = "Simulator";
             this.Text = "Simulator";
             ((System.ComponentModel.ISupportInitialize)(this.batteryElemntCount)).EndInit();
@@ -1388,5 +1392,6 @@
         private System.Windows.Forms.Label label17;
         private System.Windows.Forms.Label label18;
         private System.Windows.Forms.Label label19;
+        private System.Windows.Forms.Label label20;
     }
 }
